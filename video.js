@@ -328,13 +328,21 @@ function refresh(){
   requestAnimationFrame(function(){ drawQueued = false; drawPreview(); });
 }
 
+// Paused at 0:00 the stage shows the opening once it has faded in (and its text has
+// risen into place) instead of the black first frame.
+function posterTime(){
+  var tx = settings.text, open = (tx.openTitle || tx.openSub) && textTimes()[0];
+  return open ? open.from + 0.9 : FADE_IN;
+}
+
 function drawPreview(){
   if(!active || exporting) return;
   var sz = previewSize();
   if(vCanvas.width !== sz[0]) vCanvas.width = sz[0];
   if(vCanvas.height !== sz[1]) vCanvas.height = sz[1];
   shownView = null;
-  paintFrame(vctx, sz[0], sz[1], pos, Math.floor(pos*FPS), previewTex, T.grade());
+  var t = playing || pos > 0 ? pos : posterTime();
+  paintFrame(vctx, sz[0], sz[1], t, Math.floor(t*FPS), previewTex, T.grade());
   if(playing){   // get the next photo onto the GPU before its dissolve starts
     var next = segs.filter(function(s){ return s.start > pos; })[0];
     if(next) previewTex(next.clip);
