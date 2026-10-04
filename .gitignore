@@ -1,2 +1,11 @@
 .DS_Store
 .claude/
+
+# reference material and personal photos stay local
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.tif
+*.tiff

@@ -170,6 +170,17 @@ h1,h2,h3,p{margin:0}
 .look .nm{display:block;margin-top:6px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .look:hover .sw{box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--line-strong)}
 .look[aria-pressed="true"] .sw{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
+.look.wide{
+  grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);
+}
+.look.wide .sw{width:34px;height:34px;flex:none;border-radius:9px;box-shadow:none}
+.look.wide .nm{margin:0}
+.look.wide .nm small{display:block;font-size:11.5px;font-weight:500;color:var(--ink-3)}
+.look.wide:hover{border-color:var(--line-strong)}
+.look.wide[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.look.wide[aria-pressed="true"] .sw,.look.wide:hover .sw{box-shadow:none}
+.lookgroup{grid-column:1/-1;margin:8px 0 -4px}
 .saverow{display:flex;gap:8px;margin-top:14px}
 .saverow input{
   flex:1;min-width:0;border:1px solid var(--line-strong);background:var(--surface);
@@ -419,52 +430,75 @@ select:focus-visible{outline:none;border-color:var(--ink)}
 var DEFAULTS = {
   exposure:0, contrast:0, highlights:0, shadows:0, whites:0, blacks:0,
   temp:0, tint:0, vibrance:0, saturation:0,
+  warmSat:0, warmLum:0, greenHue:0, greenSat:0, greenLum:0, blueSat:0, blueLum:0,
   fade:0, vignette:0, grain:0,
   shadowTint:'#404a58', shadowAmt:0, highlightTint:'#d8cbb8', highlightAmt:0, balance:0
 };
 
+// Moody looks are tuned against a country-editorial moodboard: creamy rather
+// than golden whites, natural muted greens, pale skies, rich timber and soft
+// blacks that still print with detail. Classic looks are film-style grades.
 var PRESETS = [
-  { id:'none', name:'Original', note:'no grade', p:{} },
-  { id:'overcast', name:'Overcast', note:'cool, soft', p:{
-      exposure:-0.10, contrast:0.10, highlights:-0.35, shadows:0.20, whites:-0.15, blacks:-0.05,
-      temp:-0.22, tint:0.05, vibrance:-0.10, saturation:-0.20,
-      fade:0.18, vignette:0.20, grain:0.12,
-      shadowTint:'#3a4a5c', shadowAmt:0.35, highlightTint:'#c8d4e0', highlightAmt:0.20, balance:-0.10 }},
-  { id:'ember', name:'Ember', note:'warm highs, cold shadows', p:{
-      exposure:-0.15, contrast:0.25, highlights:-0.30, shadows:-0.10, whites:0.05, blacks:-0.25,
-      temp:0.18, tint:0.00, vibrance:0.10, saturation:-0.10,
-      fade:0.10, vignette:0.35, grain:0.18,
-      shadowTint:'#1d2a3a', shadowAmt:0.45, highlightTint:'#f2a65a', highlightAmt:0.30, balance:0.10 }},
-  { id:'noir', name:'Noir', note:'hard mono', p:{
-      exposure:-0.05, contrast:0.45, highlights:-0.20, shadows:-0.20, whites:0.15, blacks:-0.35,
-      temp:-0.05, tint:0.00, vibrance:-0.30, saturation:-0.85,
-      fade:0.05, vignette:0.45, grain:0.30,
-      shadowTint:'#2a2a30', shadowAmt:0.20, highlightTint:'#e8e8ea', highlightAmt:0.10, balance:0 }},
-  { id:'smoke', name:'Smoke', note:'heavy matte', p:{
-      exposure:0.05, contrast:-0.15, highlights:-0.25, shadows:0.30, whites:-0.25, blacks:0.10,
-      temp:-0.10, tint:0.04, vibrance:-0.15, saturation:-0.35,
-      fade:0.45, vignette:0.15, grain:0.15,
-      shadowTint:'#4a4f58', shadowAmt:0.30, highlightTint:'#d6d2cc', highlightAmt:0.25, balance:-0.20 }},
-  { id:'rust', name:'Rust', note:'orange and teal', p:{
-      exposure:-0.10, contrast:0.30, highlights:-0.20, shadows:0.05, whites:0, blacks:-0.20,
-      temp:0.12, tint:-0.06, vibrance:0.20, saturation:-0.05,
-      fade:0.12, vignette:0.30, grain:0.14,
-      shadowTint:'#1b4a4f', shadowAmt:0.50, highlightTint:'#e09a5c', highlightAmt:0.35, balance:0.05 }},
-  { id:'midnight', name:'Midnight', note:'deep blue, dark', p:{
-      exposure:-0.35, contrast:0.30, highlights:-0.40, shadows:-0.15, whites:-0.10, blacks:-0.30,
-      temp:-0.30, tint:0.10, vibrance:-0.10, saturation:-0.25,
-      fade:0.08, vignette:0.50, grain:0.20,
-      shadowTint:'#141e3c', shadowAmt:0.55, highlightTint:'#8fa3c4', highlightAmt:0.25, balance:-0.15 }},
-  { id:'paper', name:'Paper', note:'warm, faded', p:{
-      exposure:0.10, contrast:-0.10, highlights:-0.20, shadows:0.25, whites:-0.20, blacks:0.15,
-      temp:0.15, tint:-0.05, vibrance:-0.20, saturation:-0.30,
-      fade:0.40, vignette:0.12, grain:0.22,
-      shadowTint:'#5c5245', shadowAmt:0.35, highlightTint:'#f0e3cc', highlightAmt:0.35, balance:0 }},
-  { id:'storm', name:'Storm', note:'cold and hard', p:{
-      exposure:-0.20, contrast:0.40, highlights:-0.45, shadows:0.10, whites:-0.05, blacks:-0.25,
-      temp:-0.18, tint:-0.12, vibrance:0.05, saturation:-0.20,
-      fade:0.15, vignette:0.40, grain:0.16,
-      shadowTint:'#283a33', shadowAmt:0.45, highlightTint:'#b9c6c2', highlightAmt:0.20, balance:-0.05 }}
+  { id:'none', name:'Original', note:'No grade', p:{} },
+  { id:'homestead', group:'Moody', name:'Homestead', note:'earthy and muted, soft blacks, rich timber', p:{
+      exposure:-0.80, contrast:0.25, highlights:0.60, shadows:0.10, whites:0.45, blacks:-0.12,
+      temp:-0.12, tint:0.03, vibrance:-0.10, saturation:-0.12,
+      warmSat:0.15, greenHue:0.35, greenSat:-0.25, greenLum:-0.05, blueSat:-0.50, blueLum:0.25,
+      fade:0.40, vignette:0.10, grain:0.03,
+      shadowTint:'#8a7360', shadowAmt:0.20, highlightTint:'#f0dfc0', highlightAmt:0.10, balance:0 }},
+  { id:'lamplight', group:'Moody', name:'Lamplight', note:'low-key interiors, glowing windows', p:{
+      exposure:-1.00, contrast:0.40, highlights:0.85, shadows:0.25, whites:0.70, blacks:-0.35,
+      temp:-0.06, tint:0.02, vibrance:-0.10, saturation:-0.20,
+      warmSat:0.10, warmLum:-0.10, greenHue:0.30, greenSat:-0.30, greenLum:-0.10, blueSat:-0.50, blueLum:0.10,
+      fade:0.35, vignette:0.25, grain:0.04,
+      shadowTint:'#7d6450', shadowAmt:0.30, highlightTint:'#f2d9b0', highlightAmt:0.18, balance:0 }},
+  { id:'veranda', group:'Moody', name:'Veranda', note:'warm natural light', p:{
+      exposure:-0.30, contrast:0.18, highlights:0.25, shadows:-0.05, whites:0.25, blacks:-0.15,
+      temp:-0.08, tint:0.02, vibrance:-0.10, saturation:-0.10,
+      warmSat:0.20, warmLum:-0.10, greenHue:0.30, greenSat:-0.30, greenLum:-0.10, blueSat:-0.40, blueLum:0.20,
+      fade:0.25, vignette:0.12, grain:0.03,
+      shadowTint:'#7d6a58', shadowAmt:0.20, highlightTint:'#f2e6d0', highlightAmt:0.10, balance:0 }},
+  { id:'overcast', group:'Moody', name:'Overcast', note:'soft grey-sky light', p:{
+      exposure:-0.25, contrast:0.05, highlights:0.20, shadows:0.15, whites:0.10, blacks:-0.05,
+      temp:-0.18, tint:0.02, vibrance:-0.15, saturation:-0.25,
+      greenHue:0.30, greenSat:-0.30, greenLum:0.05, blueSat:-0.60, blueLum:0.35,
+      fade:0.35, vignette:0.06, grain:0.03,
+      shadowTint:'#6f7a80', shadowAmt:0.15, highlightTint:'#e8e4dc', highlightAmt:0.08, balance:0 }},
+  { id:'dusk', group:'Moody', name:'Dusk', note:'evening, warm windows, cool shadows', p:{
+      exposure:-0.90, contrast:0.30, highlights:0.50, shadows:0.10, whites:0.40, blacks:-0.30,
+      temp:-0.05, tint:0, vibrance:-0.05, saturation:-0.15,
+      warmSat:0.30, greenHue:0.20, greenSat:-0.30, greenLum:-0.20, blueSat:-0.30, blueLum:-0.20,
+      fade:0.30, vignette:0.20, grain:0.04,
+      shadowTint:'#4f6266', shadowAmt:0.35, highlightTint:'#f2c98e', highlightAmt:0.25, balance:0 }},
+  { id:'slate', group:'Moody', name:'Slate', note:'cool and deep', p:{
+      exposure:-0.60, contrast:0.20, highlights:0.40, shadows:0.05, whites:0.30, blacks:-0.15,
+      temp:-0.30, tint:0.02, vibrance:-0.15, saturation:-0.30,
+      warmSat:-0.10, greenHue:0.40, greenSat:-0.40, greenLum:-0.15, blueSat:-0.30,
+      fade:0.35, vignette:0.15, grain:0.04,
+      shadowTint:'#56636b', shadowAmt:0.30, highlightTint:'#dfe3e6', highlightAmt:0.08, balance:0 }},
+  { id:'ember', group:'Classic', name:'Ember', note:'warm highs, cool shadows', p:{
+      exposure:-0.20, contrast:0.18, highlights:-0.10, shadows:0.05, whites:0.15, blacks:-0.10,
+      temp:0.10, tint:0, vibrance:0.05, saturation:-0.10,
+      greenSat:-0.20, blueSat:-0.20,
+      fade:0.18, vignette:0.18, grain:0.06,
+      shadowTint:'#3a5060', shadowAmt:0.35, highlightTint:'#f0b070', highlightAmt:0.22, balance:0.10 }},
+  { id:'rust', group:'Classic', name:'Rust', note:'orange and teal', p:{
+      exposure:-0.10, contrast:0.20, highlights:-0.15, shadows:0.10, whites:0.05, blacks:-0.10,
+      temp:0.06, tint:-0.05, vibrance:0.15, saturation:-0.05,
+      warmSat:0.20, greenHue:0.50, greenSat:-0.15, blueSat:0.10,
+      fade:0.15, vignette:0.16, grain:0.05,
+      shadowTint:'#2a6a6a', shadowAmt:0.45, highlightTint:'#e09a5c', highlightAmt:0.30, balance:0.05 }},
+  { id:'paper', group:'Classic', name:'Paper', note:'warm and faded', p:{
+      exposure:0.05, contrast:-0.10, highlights:-0.20, shadows:0.25, whites:-0.15, blacks:0.10,
+      temp:0.08, tint:-0.04, vibrance:-0.20, saturation:-0.30,
+      greenSat:-0.30, blueSat:-0.40,
+      fade:0.35, vignette:0.08, grain:0.06,
+      shadowTint:'#5c5245', shadowAmt:0.30, highlightTint:'#f0e3cc', highlightAmt:0.30, balance:0 }},
+  { id:'noir', group:'Classic', name:'Noir', note:'black and white', p:{
+      exposure:-0.05, contrast:0.35, highlights:-0.10, shadows:0.05, whites:0.20, blacks:-0.20,
+      saturation:-1.00,
+      fade:0.12, vignette:0.20, grain:0.08,
+      shadowTint:'#2a2a30', shadowAmt:0.10, highlightTint:'#e8e8ea', highlightAmt:0.05, balance:0 }}
 ];
 
 var SLIDERS = [
@@ -478,6 +512,13 @@ var SLIDERS = [
   { g:'Colour', k:'tint',       label:'Tint',        min:-1, max:1,   step:0.01 },
   { g:'Colour', k:'vibrance',   label:'Vibrance',    min:-1, max:1,   step:0.01 },
   { g:'Colour', k:'saturation', label:'Saturation',  min:-1, max:1,   step:0.01 },
+  { g:'Colour mix', k:'warmSat',  label:'Warm saturation',  min:-1, max:1, step:0.01 },
+  { g:'Colour mix', k:'warmLum',  label:'Warm brightness',  min:-1, max:1, step:0.01 },
+  { g:'Colour mix', k:'greenHue', label:'Green hue',        min:-1, max:1, step:0.01 },
+  { g:'Colour mix', k:'greenSat', label:'Green saturation', min:-1, max:1, step:0.01 },
+  { g:'Colour mix', k:'greenLum', label:'Green brightness', min:-1, max:1, step:0.01 },
+  { g:'Colour mix', k:'blueSat',  label:'Blue saturation',  min:-1, max:1, step:0.01 },
+  { g:'Colour mix', k:'blueLum',  label:'Blue brightness',  min:-1, max:1, step:0.01 },
   { g:'Effects', k:'fade',     label:'Fade',       min:0,    max:1,   step:0.01 },
   { g:'Effects', k:'vignette', label:'Vignette',   min:-0.5, max:1,   step:0.01 },
   { g:'Effects', k:'grain',    label:'Grain',      min:0,    max:1,   step:0.01 }
@@ -525,8 +566,9 @@ var VERT = '#version 300 es\n' +
 'void main(){ v_uv = vec2(a_pos.x*0.5+0.5, 0.5-a_pos.y*0.5); gl_Position = vec4(a_pos,0.0,1.0); }\n';
 
 // u_frame is the crop frame in uv space (x, y, w, h). Vignette and grain are
-// placed relative to it, so the preview matches the cropped export. u_dim and
-// u_grid are preview-only: shade outside the frame, show a thirds grid.
+// placed relative to it, so the preview matches the cropped export. u_view is
+// the part of the image this draw covers, so big exports can be rendered in
+// strips. u_dim and u_grid are preview-only: shade outside the frame, thirds grid.
 var FRAG = '#version 300 es\n' +
 'precision highp float;\n' +
 'in vec2 v_uv;\n' +
@@ -538,16 +580,37 @@ var FRAG = '#version 300 es\n' +
 'uniform vec3 u_shTint,u_hiTint;\n' +
 'uniform float u_shAmt,u_hiAmt,u_balance;\n' +
 'uniform float u_aspect,u_mix;\n' +
-'uniform vec4 u_frame;\n' +
+'uniform vec4 u_frame,u_view;\n' +
 'uniform float u_dim,u_grid;\n' +
+'uniform float u_warmSat,u_warmLum,u_greenHue,u_greenSat,u_greenLum,u_blueSat,u_blueLum;\n' +
 'float s2l(float c){ return c<=0.04045 ? c/12.92 : pow((c+0.055)/1.055,2.4); }\n' +
 'float l2s(float c){ return c<=0.0031308 ? c*12.92 : 1.055*pow(c,1.0/2.4)-0.055; }\n' +
 'vec3 toLin(vec3 c){ return vec3(s2l(c.r),s2l(c.g),s2l(c.b)); }\n' +
 'vec3 toSrgb(vec3 c){ return vec3(l2s(c.r),l2s(c.g),l2s(c.b)); }\n' +
 'float luma(vec3 c){ return dot(c,vec3(0.2126,0.7152,0.0722)); }\n' +
 'float hash(vec2 p){ p=fract(p*vec2(443.897,441.423)); p+=dot(p,p+19.19); return fract((p.x+p.y)*p.x); }\n' +
+// smooth value noise, so grain stays soft instead of square at print sizes
+'float vnoise(vec2 p){\n' +
+'  vec2 i = floor(p), f = fract(p);\n' +
+'  f = f*f*(3.0 - 2.0*f);\n' +
+'  return mix(mix(hash(i), hash(i + vec2(1.0,0.0)), f.x), mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), f.x), f.y);\n' +
+'}\n' +
+'vec3 rgb2hsv(vec3 c){\n' +
+'  vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);\n' +
+'  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));\n' +
+'  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));\n' +
+'  float d = q.x - min(q.w, q.y);\n' +
+'  return vec3(abs(q.z + (q.w - q.y)/(6.0*d + 1e-10)), d/(q.x + 1e-10), q.x);\n' +
+'}\n' +
+'vec3 hsv2rgb(vec3 c){\n' +
+'  vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0/3.0, 1.0/3.0))*6.0 - 3.0);\n' +
+'  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);\n' +
+'}\n' +
+// hue band that fades in over a..b and out over c..d (hue 0..1)
+'float band(float h, float a, float b, float c, float d){ return smoothstep(a, b, h)*(1.0 - smoothstep(c, d, h)); }\n' +
 'void main(){\n' +
-'  vec3 src = texture(u_tex, v_uv).rgb;\n' +
+'  vec2 uv = u_view.xy + v_uv*u_view.zw;\n' +
+'  vec3 src = texture(u_tex, uv).rgb;\n' +
 '  vec3 lin = toLin(src);\n' +
 '  lin.r *= 1.0 + u_temp*0.45;\n' +
 '  lin.b *= 1.0 - u_temp*0.45;\n' +
@@ -568,6 +631,18 @@ var FRAG = '#version 300 es\n' +
 '  float mn = min(c.r,min(c.g,c.b));\n' +
 '  float vib = u_vibrance*(1.0-(mx-mn));\n' +
 '  c = clamp(mix(vec3(L2), c, 1.0 + u_saturation + vib), 0.0, 1.0);\n' +
+// colour mix: saturation and brightness per hue band, plus a hue nudge for
+// greens. The green band starts low enough to catch golden, sunlit grass
+// without reaching timber; near-neutral pixels are left alone.
+'  vec3 hsv = rgb2hsv(c);\n' +
+'  float gate = smoothstep(0.02, 0.15, hsv.y);\n' +
+'  float wW = band(hsv.x, 0.0, 0.03, 0.09, 0.115)*gate;\n' +
+'  float wG = band(hsv.x, 0.095, 0.13, 0.43, 0.5)*gate;\n' +
+'  float wB = band(hsv.x, 0.47, 0.53, 0.7, 0.76)*gate;\n' +
+'  hsv.x = fract(hsv.x + u_greenHue*wG*0.06);\n' +
+'  hsv.y = clamp(hsv.y*(1.0 + u_warmSat*wW + u_greenSat*wG + u_blueSat*wB), 0.0, 1.0);\n' +
+'  hsv.z *= 1.0 + 0.5*(u_warmLum*wW + u_greenLum*wG + u_blueLum*wB);\n' +
+'  c = clamp(hsv2rgb(hsv), 0.0, 1.0);\n' +
 '  float L3 = luma(c);\n' +
 '  float pivot = 0.5 - u_balance*0.30;\n' +
 '  float hiW = smoothstep(pivot, 1.0, L3);\n' +
@@ -576,14 +651,13 @@ var FRAG = '#version 300 es\n' +
 '  c += (u_hiTint - 0.5)*hiW*u_hiAmt*0.70;\n' +
 '  c = clamp(c, 0.0, 1.0);\n' +
 '  c = c*(1.0 - u_fade*0.26) + u_fade*0.13;\n' +
-'  vec2 fuv = (v_uv - u_frame.xy) / u_frame.zw;\n' +
+'  vec2 fuv = (uv - u_frame.xy) / u_frame.zw;\n' +
 '  float fa = u_aspect * u_frame.z / u_frame.w;\n' +
 '  vec2 vp = (fuv - 0.5)*vec2(fa, 1.0);\n' +
 '  float d = clamp(length(vp)/0.7071, 0.0, 1.0);\n' +
 '  float vg = smoothstep(0.35, 1.0, d);\n' +
 '  c *= (1.0 - u_vignette*vg);\n' +
-'  vec2 gc = floor(fuv*vec2(1400.0*fa, 1400.0));\n' +
-'  float n = hash(gc) - 0.5;\n' +
+'  float n = (vnoise(fuv*vec2(1400.0*fa, 1400.0)) - 0.5)*1.35;\n' +
 '  float gw = 1.0 - abs(luma(c) - 0.5)*1.1;\n' +
 '  c += n*u_grain*0.22*max(gw, 0.0);\n' +
 '  c = clamp(c, 0.0, 1.0);\n' +
@@ -638,7 +712,8 @@ function initGL(){
 
   ['exposure','contrast','highlights','shadows','whites','blacks','temp','tint',
    'vibrance','saturation','fade','vignette','grain','shTint','hiTint','shAmt',
-   'hiAmt','balance','aspect','mix','frame','dim','grid','tex'].forEach(function(n){
+   'hiAmt','balance','aspect','mix','frame','view','dim','grid','tex',
+   'warmSat','warmLum','greenHue','greenSat','greenLum','blueSat','blueLum'].forEach(function(n){
     uni[n] = gl.getUniformLocation(prog, 'u_' + n);
   });
   gl.uniform1i(uni.tex, 0);
@@ -654,8 +729,10 @@ function hexRGB(h){
 canvas.addEventListener('webglcontextlost', function(e){ e.preventDefault(); });
 canvas.addEventListener('webglcontextrestored', function(){ initGL(); render(); });
 
-// view (optional): { frame:[x,y,w,h], dim, grid } for the crop preview
+// view (optional): { frame:[x,y,w,h], dim, grid } for the crop preview, or
+// { region:[x,y,w,h], aspect } to render one strip of a bigger image
 function draw(w, h, bitmap, mixAmount, grade, view){
+  var v = view || {};
   if(canvas.width !== w) canvas.width = w;
   if(canvas.height !== h) canvas.height = h;
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -678,6 +755,13 @@ function draw(w, h, bitmap, mixAmount, grade, view){
   gl.uniform1f(uni.tint,       e.tint);
   gl.uniform1f(uni.vibrance,   e.vibrance);
   gl.uniform1f(uni.saturation, e.saturation);
+  gl.uniform1f(uni.warmSat,    e.warmSat);
+  gl.uniform1f(uni.warmLum,    e.warmLum);
+  gl.uniform1f(uni.greenHue,   e.greenHue);
+  gl.uniform1f(uni.greenSat,   e.greenSat);
+  gl.uniform1f(uni.greenLum,   e.greenLum);
+  gl.uniform1f(uni.blueSat,    e.blueSat);
+  gl.uniform1f(uni.blueLum,    e.blueLum);
   gl.uniform1f(uni.fade,       e.fade);
   gl.uniform1f(uni.vignette,   e.vignette);
   gl.uniform1f(uni.grain,      e.grain);
@@ -686,12 +770,12 @@ function draw(w, h, bitmap, mixAmount, grade, view){
   gl.uniform1f(uni.shAmt,   e.shadowAmt);
   gl.uniform1f(uni.hiAmt,   e.highlightAmt);
   gl.uniform1f(uni.balance, e.balance);
-  gl.uniform1f(uni.aspect,  w / h);
+  gl.uniform1f(uni.aspect,  v.aspect || w / h);
   gl.uniform1f(uni.mix,     mixAmount);
 
-  var v = view || {};
-  var f = v.frame || [0, 0, 1, 1];
+  var f = v.frame || [0, 0, 1, 1], r = v.region || [0, 0, 1, 1];
   gl.uniform4f(uni.frame, f[0], f[1], f[2], f[3]);
+  gl.uniform4f(uni.view,  r[0], r[1], r[2], r[3]);
   gl.uniform1f(uni.dim,  v.dim || 0);
   gl.uniform1f(uni.grid, v.grid ? 1 : 0);
 
@@ -870,10 +954,23 @@ function paintSwatches(){
   }).catch(function(){});
 }
 
+// Original sits on top as a slim card; the rest are grouped under headings.
 function buildPresets(){
   var grid = $('presetGrid');
+  var group = null;
   PRESETS.forEach(function(pr){
+    if(pr.group && pr.group !== group){
+      group = pr.group;
+      var h = document.createElement('h3');
+      h.className = 'section-title lookgroup'; h.textContent = group;
+      grid.appendChild(h);
+    }
     var b = lookButton(pr.id, pr.name, pr.name + ': ' + pr.note);
+    if(!pr.group){
+      b.classList.add('wide');
+      var sm = document.createElement('small'); sm.textContent = pr.note;
+      b.querySelector('.nm').appendChild(sm);
+    }
     b.addEventListener('click', function(){ applyPreset(pr.id); });
     grid.appendChild(b);
   });
@@ -1444,22 +1541,108 @@ function renderToBlob(it, maxEdge, quality, grade, cp){
   }else{
     ready = decode(it.file, maxEdge ? Math.min(limit, maxEdge) : limit);
   }
-  return ready.then(function(bm){
-    // A big canvas can quietly get a smaller drawing buffer than it asked for
-    // (iOS especially), which would crop the export. Shrink to what we got.
-    canvas.width = bm.width; canvas.height = bm.height;
-    var s = Math.min(gl.drawingBufferWidth / bm.width, gl.drawingBufferHeight / bm.height);
-    return s < 1 ? resample(bm, Math.floor(bm.width*s), Math.floor(bm.height*s)) : bm;
-  }).then(function(bm){
+  return Promise.all([ready.then(function(bm){ return encode(bm, quality, grade); }), readDensity(it.file)])
+    .then(function(r){ return withDensity(r[0], r[1]); });
+}
+
+function toJpeg(c, quality){
+  return new Promise(function(resolve){ c.toBlob(resolve, 'image/jpeg', quality); });
+}
+
+// Grades and encodes a bitmap, closing it. Browsers cap the WebGL drawing
+// buffer (Chrome at about 33 MP, iOS lower), so a bigger photo is rendered in
+// strips into a 2D canvas at full size. Only if that fails too is it shrunk.
+function encode(bm, quality, grade){
+  var W = bm.width, H = bm.height;
+  canvas.width = W; canvas.height = H;
+  var bw = gl.drawingBufferWidth, bh = gl.drawingBufferHeight;
+  if(bw >= W && bh >= H){
     // draw and toBlob stay in one synchronous block so a preview repaint
     // can never land in between
-    draw(bm.width, bm.height, bm, 1, grade);
-    return new Promise(function(resolve, reject){
-      canvas.toBlob(function(blob){
-        bm.close();
-        blob ? resolve(blob) : reject(new Error('encoding failed'));
-      }, 'image/jpeg', quality);
+    draw(W, H, bm, 1, grade);
+    return done(toJpeg(canvas, quality));
+  }
+  var full = renderStrips(bm, grade, bw * bh);
+  return (full ? toJpeg(full, quality) : Promise.resolve(null)).then(function(blob){
+    if(blob) return done(Promise.resolve(blob));
+    var s = Math.min(bw / W, bh / H);
+    return resample(bm, Math.floor(W*s), Math.floor(H*s)).then(function(small){
+      return encode(small, quality, grade);
     });
+  });
+  function done(p){
+    return p.then(function(blob){
+      bm.close();
+      if(!blob) throw new Error('encoding failed');
+      return blob;
+    });
+  }
+}
+
+// Renders bm in horizontal strips that each fit the drawing buffer, copying
+// them into one full-size 2D canvas. Grain and vignette are computed in image
+// space, so the strips join without seams. Returns null if it can't.
+function renderStrips(bm, grade, area){
+  var W = bm.width, H = bm.height;
+  var out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  var ctx = out.getContext('2d');
+  if(!ctx) return null;
+  var step = Math.max(1, Math.floor(area / W * 0.9));
+  for(var y = 0; y < H; y += step){
+    var h = Math.min(step, H - y);
+    canvas.width = W; canvas.height = h;
+    if(gl.drawingBufferWidth !== W || gl.drawingBufferHeight !== h) return null;
+    draw(W, h, bm, 1, grade, { region:[0, y / H, 1, h / H], aspect:W / H });
+    ctx.drawImage(canvas, 0, y);
+  }
+  return out;
+}
+
+// The resolution tag (e.g. 300 dpi) from the original's JFIF or EXIF header,
+// so exports aren't labelled 72 dpi. Resolves null if there isn't one.
+function readDensity(file){
+  return file.slice(0, 65536).arrayBuffer().then(function(buf){
+    var d = new DataView(buf), i = 2;
+    if(d.getUint16(0) !== 0xFFD8) return null;
+    while(i + 4 <= d.byteLength && d.getUint8(i) === 0xFF){
+      var marker = d.getUint8(i + 1), s = i + 4;
+      if(marker === 0xDA) break;
+      if(marker === 0xE0 && d.getUint32(s) === 0x4A464946 && d.getUint8(s + 7)){   // 'JFIF', with units
+        return { unit:d.getUint8(s + 7), x:d.getUint16(s + 8), y:d.getUint16(s + 10) };
+      }
+      if(marker === 0xE1 && d.getUint32(s) === 0x45786966){   // 'Exif'
+        var t = s + 6, le = d.getUint16(t) === 0x4949, res = {};
+        var u16 = function(o){ return d.getUint16(t + o, le); };
+        var u32 = function(o){ return d.getUint32(t + o, le); };
+        var ifd = u32(4);
+        for(var k = 0, n = u16(ifd); k < n; k++){
+          var e = ifd + 2 + k*12, tag = u16(e);
+          if(tag === 0x011A || tag === 0x011B){ var o = u32(e + 8); res[tag] = u32(o) / (u32(o + 4) || 1); }
+          if(tag === 0x0128) res.unit = u16(e + 8);
+        }
+        if(res[0x011A]){   // EXIF unit 3 is centimetres, else inches
+          return { unit:res.unit === 3 ? 2 : 1, x:Math.round(res[0x011A]), y:Math.round(res[0x011B] || res[0x011A]) };
+        }
+      }
+      i = s + d.getUint16(i + 2) - 2;
+    }
+    return null;
+  }).catch(function(){ return null; });
+}
+
+// Writes the density into the export's JFIF header, adding one if missing.
+function withDensity(blob, dens){
+  if(!dens || !dens.x || !dens.y) return blob;
+  return blob.arrayBuffer().then(function(buf){
+    var b = new Uint8Array(buf);
+    if(b[2] === 0xFF && b[3] === 0xE0 && b[6] === 0x4A && b[7] === 0x46 && b[8] === 0x49 && b[9] === 0x46){
+      b[13] = dens.unit; b[14] = dens.x >> 8; b[15] = dens.x & 255; b[16] = dens.y >> 8; b[17] = dens.y & 255;
+      return new Blob([b], { type:'image/jpeg' });
+    }
+    var app0 = new Uint8Array([0xFF,0xE0, 0,16, 0x4A,0x46,0x49,0x46,0, 1,1, dens.unit,
+      dens.x >> 8, dens.x & 255, dens.y >> 8, dens.y & 255, 0,0]);
+    return new Blob([b.subarray(0, 2), app0, b.subarray(2)], { type:'image/jpeg' });
   });
 }
 
@@ -1679,7 +1862,7 @@ try{
   buildPresets();
   buildAdjust();
   buildCrops();
-  applyPreset('overcast');
+  applyPreset('homestead');
   buildCustomGrid();
   initStore();
   updateCropUI();

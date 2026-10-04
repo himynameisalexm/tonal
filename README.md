@@ -28,23 +28,29 @@ site within a minute or so. Any other static host works too.
 Working:
 
 - WebGL2 single-pass grading pipeline (exposure, contrast, highlights, shadows,
-  whites, blacks, temperature, tint, vibrance, saturation, fade, vignette, grain,
-  split toning)
-- 8 built-in looks with a strength slider; each look's swatch previews the current photo
+  whites, blacks, temperature, tint, vibrance, saturation, colour mix for warm
+  tones, greens and blues, fade, vignette, grain, split toning)
+- 10 built-in looks with a strength slider; each look's swatch previews the current
+  photo. Moody: Homestead, Lamplight, Veranda, Overcast, Dusk and Slate, tuned
+  against a country-editorial moodboard (creamy whites, muted natural greens, pale
+  skies, rich timber, soft blacks that still print with detail). Classic: Ember,
+  Rust, Paper and Noir
 - Named custom looks saved to `localStorage`
 - Crop presets exported at each platform's exact size: Instagram portrait 3:4
   (1080×1440) and 4:5 (1080×1350), square, landscape 1.91:1 and Story/Reel 9:16;
   Facebook post 4:5, square, landscape 1.91:1 (1200×630), cover (851×315) and Story.
   Drag to frame and zoom; each photo keeps its own framing
 - Folder or multi-file input; drop files or whole folders anywhere on the page
-- Batch export to ZIP, with configurable max long edge and JPEG quality
+- Batch export to ZIP, with configurable max long edge and JPEG quality. Full-size
+  exports keep every pixel (photos bigger than the browser's WebGL limit are
+  rendered in strips) and the original's resolution tag, e.g. 300 dpi for print
 - EXIF orientation honoured on load
 - Light and dark themes, following the system setting
 
 Known gaps:
 
-- EXIF metadata other than orientation (capture date, camera, GPS) is stripped on
-  re-encode
+- EXIF metadata other than orientation and resolution (capture date, camera, GPS)
+  is stripped on re-encode
 - No colour management; everything assumes sRGB
 - No RAW or HEIC support
 - No per-photo grade overrides; one grade applies to the whole set (crop framing is
