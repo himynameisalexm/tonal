@@ -322,13 +322,16 @@ select{
 <p class="note">
   Processing is local and non-destructive: your originals are never touched or uploaded.
   Export writes new JPEGs into a ZIP. EXIF orientation is honoured, but other metadata
-  (capture date, camera, GPS) is not carried through yet. Folder picking works in
-  Chrome, Edge and Safari; Firefox supports multi-file selection but not folders.
+  (capture date, camera, GPS) is not carried through yet. Adding or dropping whole
+  folders works in desktop Chrome, Edge, Firefox and Safari; on phones and tablets,
+  use <em>Add photos</em>.
 </p>
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+  integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 (function(){
 'use strict';
@@ -532,15 +535,20 @@ function hexRGB(h){
   return [((n>>16)&255)/255, ((n>>8)&255)/255, (n&255)/255];
 }
 
-function draw(w, h, bitmap, mixAmount){
+// The GPU can drop the context (driver reset, or iOS reclaiming a background
+// tab). Rebuild everything when it comes back.
+canvas.addEventListener('webglcontextlost', function(e){ e.preventDefault(); });
+canvas.addEventListener('webglcontextrestored', function(){ initGL(); render(); });
+
+function draw(w, h, bitmap, mixAmount, grade){
   canvas.width = w; canvas.height = h;
-  gl.viewport(0, 0, w, h);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
 
-  var e = edit;
+  var e = grade || edit;
   gl.uniform1f(uni.exposure,   e.exposure);
   gl.uniform1f(uni.contrast,   e.contrast);
   gl.uniform1f(uni.highlights, e.highlights);
@@ -575,16 +583,37 @@ function fitInto(w, h, max){
   return [Math.max(1, Math.round(w*s)), Math.max(1, Math.round(h*s))];
 }
 
-function decode(file, maxEdge){
-  var opts = { imageOrientation:'from-image' };
-  return createImageBitmap(file, opts).then(function(bm){
-    if(!maxEdge || (bm.width <= maxEdge && bm.height <= maxEdge)) return bm;
-    var d = fitInto(bm.width, bm.height, maxEdge);
-    return createImageBitmap(bm, { resizeWidth:d[0], resizeHeight:d[1], resizeQuality:'high' })
-      .then(function(small){ bm.close(); return small; });
-  }).catch(function(){
-    return createImageBitmap(file);
-  });
+// Decodes with EXIF orientation applied, scaled to fit maxEdge (0 = full size).
+// Pass `size` to get the full-size dimensions back without a second decode.
+function decode(file, maxEdge, size){
+  return createImageBitmap(file, { imageOrientation:'from-image' })
+    .catch(function(){ return createImageBitmap(file); })
+    .then(function(bm){
+      if(size){ size.w = bm.width; size.h = bm.height; }
+      var d = fitInto(bm.width, bm.height, maxEdge);
+      return shrink(bm, d[0], d[1]);
+    });
+}
+
+// Resizes a bitmap and closes the original. Some browsers ignore the resize
+// options, so check what came back and fall back to a 2D canvas.
+function shrink(bm, w, h){
+  if(bm.width === w && bm.height === h) return Promise.resolve(bm);
+  return createImageBitmap(bm, { resizeWidth:w, resizeHeight:h, resizeQuality:'high' })
+    .then(function(small){
+      if(small.width === w && small.height === h) return small;
+      small.close();
+      throw new Error('resize ignored');
+    })
+    .catch(function(){
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      var ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bm, 0, 0, w, h);
+      return createImageBitmap(c);
+    })
+    .then(function(small){ bm.close(); return small; });
 }
 
 function makeThumb(file){
@@ -803,14 +832,11 @@ strengthInput.addEventListener('input', function(){
   interacted = true;
   strength = parseFloat(strengthInput.value);
   $('v_strength').textContent = Math.round(strength*100) + '%';
-  if(activePreset !== 'custom'){
-    var pr = PRESETS.filter(function(p){ return p.id === activePreset; })[0];
-    if(pr){
-      var base = Object.assign({}, DEFAULTS);
-      Object.keys(pr.p).forEach(function(k){ base[k] = pr.p[k]; });
-      edit = scalePreset(base, strength);
-      syncSliders();
-    }
+  // built-in or saved look; a hand-made 'custom' grade has nothing to scale
+  var look = PRESETS.concat(customLooks).filter(function(p){ return p.id === activePreset; })[0];
+  if(look){
+    edit = scalePreset(Object.assign({}, DEFAULTS, look.p), strength);
+    syncSliders();
   }
   render();
   persist();
@@ -876,20 +902,18 @@ function selectImage(i){
     el.setAttribute('aria-pressed', idx === i ? 'true' : 'false');
   });
   var it = items[i];
+  var size = {};
   fnameEl.textContent = it.name;
   dimsEl.textContent = '';
-  decode(it.file, PREVIEW_MAX).then(function(bm){
-    if(current !== i){ bm.close(); return; }
+  decode(it.file, PREVIEW_MAX, size).then(function(bm){
+    if(items[current] !== it){ bm.close(); return; }
     if(previewBitmap) previewBitmap.close();
     previewBitmap = bm;
+    it.w = size.w; it.h = size.h;
+    dimsEl.textContent = size.w + ' × ' + size.h;
     canvas.classList.remove('hidden');
     emptyEl.classList.add('hidden');
     render();
-    return decode(it.file, 0).then(function(full){
-      if(current === i) dimsEl.textContent = full.width + ' × ' + full.height;
-      it.w = full.width; it.h = full.height;
-      full.close();
-    });
   }).catch(function(err){
     say('Could not open ' + it.name + ': ' + err.message);
   });
@@ -899,31 +923,33 @@ function selectImage(i){
 
 function addFiles(fileList){
   var incoming = Array.prototype.filter.call(fileList, function(f){
+    if(f.name.charAt(0) === '.') return false;   // macOS ._ sidecars, .DS_Store
     return /^image\/(jpeg|png|webp)$/.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name);
   });
   if(!incoming.length){ say('No JPEG, PNG or WebP files found in that selection.'); return; }
   say('');
   incoming.sort(function(a,b){ return a.name.localeCompare(b.name, undefined, {numeric:true}); });
 
-  var startIndex = items.length;
-  incoming.forEach(function(f){
-    items.push({ file:f, name:f.name, thumb:null, w:0, h:0 });
+  var added = incoming.map(function(f){
+    return { file:f, name:f.name, thumb:null, w:0, h:0 };
   });
+  added.forEach(function(it){ items.push(it); });
   refreshStrip();
   if(current === -1) selectImage(0);
   updateExportState();
 
-  // thumbnails, one at a time so we never hold many decoded images at once
-  (function next(i){
-    if(i >= items.length) return;
-    if(items[i].thumb) return next(i+1);
-    makeThumb(items[i].file).then(function(url){
-      items[i].thumb = url;
-      var el = stripScroll.children[i];
+  // thumbnails, one at a time so we never hold many decoded images at once.
+  // Track items rather than indexes: photos can be removed while this runs.
+  (function next(k){
+    if(k >= added.length) return;
+    var it = added[k];
+    if(items.indexOf(it) < 0) return next(k+1);
+    makeThumb(it.file).then(function(url){
+      it.thumb = url;
+      var el = stripScroll.children[items.indexOf(it)];
       if(el){ var img = el.querySelector('img'); if(img) img.src = url; }
-      next(i+1);
-    }).catch(function(){ next(i+1); });
-  })(startIndex);
+    }).catch(function(){}).then(function(){ next(k+1); });
+  })(0);
 }
 
 function refreshStrip(){
@@ -941,10 +967,13 @@ function refreshStrip(){
     x.className = 'x'; x.textContent = '×'; x.title = 'Remove';
     x.addEventListener('click', function(e){
       e.stopPropagation();
+      var wasCurrent = i === current;
       items.splice(i, 1);
+      if(i < current) current--;   // keep showing the same photo
       if(current >= items.length) current = items.length - 1;
       refreshStrip();
-      if(items.length) selectImage(Math.max(0, current)); else resetView();
+      if(!items.length) resetView();
+      else if(wasCurrent) selectImage(current);
       updateExportState();
     });
     b.appendChild(x);
@@ -980,14 +1009,72 @@ $('resetAll').addEventListener('click', function(){
   applyPreset('none');
 });
 
-['dragenter','dragover'].forEach(function(ev){
-  stage.addEventListener(ev, function(e){ e.preventDefault(); stage.classList.add('drag'); });
+/* -- drag and drop: the whole window is a target, so a near miss never opens
+      the photo in place of the app. Dropped folders are walked recursively. -- */
+function flatten(lists){
+  var out = [];
+  lists.forEach(function(l){ l.forEach(function(x){ out.push(x); }); });
+  return out;
+}
+
+function walkEntry(entry){
+  if(entry.isFile){
+    return new Promise(function(resolve){
+      entry.file(function(f){ resolve([f]); }, function(){ resolve([]); });
+    });
+  }
+  if(!entry.isDirectory) return Promise.resolve([]);
+  return new Promise(function(resolve){
+    var reader = entry.createReader(), found = [];
+    // readEntries hands back one batch at a time; an empty batch means done
+    (function more(){
+      reader.readEntries(function(batch){
+        if(!batch.length) return resolve(found);
+        found = found.concat(Array.prototype.slice.call(batch));
+        more();
+      }, function(){ resolve(found); });
+    })();
+  }).then(function(children){
+    return Promise.all(children.map(walkEntry));
+  }).then(flatten);
+}
+
+// Must be called during the drop event: the items vanish once it returns.
+function filesFromDrop(dt){
+  var entries = [];
+  Array.prototype.forEach.call(dt.items || [], function(item){
+    var en = item.webkitGetAsEntry && item.webkitGetAsEntry();
+    if(en) entries.push(en);
+  });
+  if(!entries.length) return Promise.resolve(Array.prototype.slice.call(dt.files || []));
+  return Promise.all(entries.map(walkEntry)).then(flatten);
+}
+
+function isFileDrag(e){
+  var types = e.dataTransfer && e.dataTransfer.types;
+  return !!types && Array.prototype.indexOf.call(types, 'Files') >= 0;
+}
+
+var dragDepth = 0;
+window.addEventListener('dragenter', function(e){
+  if(!isFileDrag(e)) return;
+  e.preventDefault();
+  dragDepth++;
+  stage.classList.add('drag');
 });
-['dragleave','drop'].forEach(function(ev){
-  stage.addEventListener(ev, function(e){ e.preventDefault(); stage.classList.remove('drag'); });
+window.addEventListener('dragover', function(e){
+  if(isFileDrag(e)) e.preventDefault();
 });
-stage.addEventListener('drop', function(e){
-  if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+window.addEventListener('dragleave', function(e){
+  if(!isFileDrag(e)) return;
+  if(--dragDepth <= 0){ dragDepth = 0; stage.classList.remove('drag'); }
+});
+window.addEventListener('drop', function(e){
+  if(!isFileDrag(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  stage.classList.remove('drag');
+  filesFromDrop(e.dataTransfer).then(addFiles);
 });
 
 /* ============================== export ============================== */
@@ -996,25 +1083,24 @@ function outName(name){
   return name.replace(/\.[^.]+$/, '') + '_graded.jpg';
 }
 
-function renderToBlob(file, maxEdge, quality){
-  return decode(file, maxEdge || 0).then(function(bm){
-    var maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    var dims = fitInto(bm.width, bm.height, Math.min(maxTex, 16384));
-    var work = bm;
-    var resized = Promise.resolve(bm);
-    if(dims[0] !== bm.width || dims[1] !== bm.height){
-      resized = createImageBitmap(bm, { resizeWidth:dims[0], resizeHeight:dims[1], resizeQuality:'high' })
-        .then(function(r){ bm.close(); return r; });
-    }
-    return resized.then(function(r){
-      work = r;
-      draw(r.width, r.height, r, 1);
-      return new Promise(function(resolve, reject){
-        canvas.toBlob(function(blob){
-          work.close();
-          blob ? resolve(blob) : reject(new Error('encoding failed'));
-        }, 'image/jpeg', quality);
-      });
+function renderToBlob(file, maxEdge, quality, grade){
+  var limit = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), 16384);
+  if(maxEdge) limit = Math.min(limit, maxEdge);
+  return decode(file, limit).then(function(bm){
+    // A big canvas can quietly get a smaller drawing buffer than it asked for
+    // (iOS especially), which would crop the export. Shrink to what we got.
+    canvas.width = bm.width; canvas.height = bm.height;
+    var s = Math.min(gl.drawingBufferWidth / bm.width, gl.drawingBufferHeight / bm.height);
+    return s < 1 ? shrink(bm, Math.floor(bm.width*s), Math.floor(bm.height*s)) : bm;
+  }).then(function(bm){
+    // draw and toBlob stay in one synchronous block so a preview repaint
+    // can never land in between
+    draw(bm.width, bm.height, bm, 1, grade);
+    return new Promise(function(resolve, reject){
+      canvas.toBlob(function(blob){
+        bm.close();
+        blob ? resolve(blob) : reject(new Error('encoding failed'));
+      }, 'image/jpeg', quality);
     });
   });
 }
@@ -1054,30 +1140,43 @@ exportOneBtn.addEventListener('click', function(){
   });
 });
 
+function nameList(names){
+  if(names.length <= 3) return names.join(', ');
+  return names.slice(0, 3).join(', ') + ' and ' + (names.length - 3) + ' more';
+}
+
 exportAllBtn.addEventListener('click', function(){
   if(!items.length || busy) return;
+  if(typeof JSZip === 'undefined'){
+    say('The ZIP library did not load, so batch export is unavailable. Check your connection or content blocker, then reload. Export this photo still works.');
+    return;
+  }
   busy = true; updateExportState(); say('');
   var zip = new JSZip();
+  // Freeze the batch and the grade now, so touching a slider or removing a
+  // photo mid-export can't leave the set inconsistent.
+  var list = items.slice();
+  var grade = Object.assign({}, edit);
   var maxEdge = parseInt($('maxEdge').value, 10);
   var q = parseFloat($('quality').value);
-  var used = {};
+  var used = {}, done = 0, skipped = [];
 
   function step(i){
-    if(i >= items.length) return Promise.resolve();
-    setProgress((i / items.length) * 0.85);
-    return renderToBlob(items[i].file, maxEdge, q).then(function(blob){
-      var nm = outName(items[i].name);
+    if(i >= list.length) return Promise.resolve();
+    setProgress((i / list.length) * 0.85);
+    return renderToBlob(list[i].file, maxEdge, q, grade).then(function(blob){
+      var nm = outName(list[i].name);
       if(used[nm]) nm = nm.replace(/\.jpg$/, '_' + (++used[nm]) + '.jpg');
       else used[nm] = 1;
       zip.file(nm, blob);
-      return step(i+1);
-    }).catch(function(err){
-      say('Skipped ' + items[i].name + ': ' + (err.message || 'could not process'));
-      return step(i+1);
-    });
+      done++;
+    }, function(){
+      skipped.push(list[i].name);
+    }).then(function(){ return step(i+1); });
   }
 
   step(0).then(function(){
+    if(!done) throw new Error('none of the photos could be read');
     // JPEGs are already compressed, so STORE is far faster than DEFLATE
     return zip.generateAsync({ type:'blob', compression:'STORE' }, function(meta){
       setProgress(0.85 + (meta.percent/100)*0.15);
@@ -1086,7 +1185,9 @@ exportAllBtn.addEventListener('click', function(){
     setProgress(1);
     return downloads.save({ filename:'graded-photos.zip', data: blob });
   }).then(function(){
-    say(items.length + ' photos exported.', false);
+    var m = done + (done === 1 ? ' photo' : ' photos') + ' exported.';
+    if(skipped.length) say(m + ' Skipped ' + skipped.length + ' that could not be read: ' + nameList(skipped) + '.');
+    else say(m, false);
   }).catch(function(err){
     var m = describeError(err); if(m) say(m);
   }).then(function(){
