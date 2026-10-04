@@ -1,6 +1,7 @@
-/* Tonal video: photos on a timeline become a short MP4 with slow camera moves,
-   dissolves, the current look and simple text. Loaded on demand by index.html,
-   which provides window.Tonal. Everything runs in this browser. */
+/* Tonal video: photos on a timeline become a short MP4 (up to a minute) with
+   slow camera moves, blends between photos, the current look and simple text.
+   Loaded on demand by index.html, which provides window.Tonal. Everything runs
+   in this browser. */
 (function(){
 'use strict';
 
@@ -22,36 +23,74 @@ var PACES = [
   { id:'standard', name:'Standard', dur:3.5, trans:0.9, zoom:0.12, pan:0.18 },
   { id:'quick',    name:'Quick',    dur:2.5, trans:0.5, zoom:0.14, pan:0.22 }
 ];
-var MOTIONS = [['auto', 'Auto'], ['in', 'Push in'], ['out', 'Pull out'], ['left', 'Pan left'],
-               ['right', 'Pan right'], ['up', 'Rise'], ['still', 'Still']];
-var MOTION_BADGE = { in:'In', out:'Out', left:'←', right:'→', up:'↑', still:'Still' };
-var TRANSITIONS = [['dissolve', 'Dissolve'], ['dip', 'Through black'], ['cut', 'Cut']];
-var FPS = 30, FADE_IN = 0.6, FADE_OUT = 1.0, DEFAULT_LENGTH = 60, PREVIEW_EDGE = 1280, MAX_DUR = 8;
+// The camera move for the whole video (the Animation tab). A photo can have
+// its own instead (MOTIONS, in its settings); 'auto' there means the video's.
+var CAMERA = [
+  { id:'auto',  name:'Mixed',    note:'Push-ins, pans and rises, varied to suit each photo' },
+  { id:'in',    name:'Push in',  note:'Moves slowly in towards each photo’s focus point' },
+  { id:'out',   name:'Pull out', note:'Starts close, then slowly reveals the whole space' },
+  { id:'pan',   name:'Pan',      note:'Glides sideways, like a camera on a track' },
+  { id:'up',    name:'Rise',     note:'Lifts slowly upward' },
+  { id:'diag',  name:'Drift',    note:'Eases in along a gentle diagonal' },
+  { id:'still', name:'Still',    note:'Holds almost still' }
+];
+var MOTIONS = [['auto', 'Same as video'], ['in', 'Push in'], ['out', 'Pull out'], ['left', 'Pan left'],
+               ['right', 'Pan right'], ['up', 'Rise'], ['down', 'Lower'], ['diag', 'Drift'], ['still', 'Still']];
+var MOTION_BADGE = { in:'In', out:'Out', left:'←', right:'→', up:'↑', down:'↓', diag:'Drift', still:'Still' };
+
+// How each photo turns into the next. len: seconds, when not the pace's own
+// transition length (scaled by scale, capped at max); dip: through black or
+// white, rather than both photos on screen at once.
+var BLENDS = [
+  { id:'dissolve', group:'Smooth', name:'Dissolve',      note:'A soft cross-fade' },
+  { id:'bloom',    group:'Smooth', name:'Bloom',         note:'The next photo glows in through its highlights' },
+  { id:'leak',     group:'Smooth', name:'Light leak',    note:'A warm wash of film light', scale:1.15 },
+  { id:'blur',     group:'Smooth', name:'Soft focus',    note:'The photos melt together through a gentle blur' },
+  { id:'wipe',     group:'Smooth', name:'Wipe',          note:'A soft edge sweeps across' },
+  { id:'slide',    group:'Smooth', name:'Slide',         note:'The next photo glides in over the last', max:1 },
+  { id:'dip',      group:'Smooth', name:'Fade to black', note:'Dips through black', dip:true },
+  { id:'zoom',     group:'Lively', name:'Zoom',          note:'Rushes into one photo and out of the next', len:0.6 },
+  { id:'whip',     group:'Lively', name:'Whip pan',      note:'A fast, blurred sweep sideways', len:0.45 },
+  { id:'flash',    group:'Lively', name:'Flash',         note:'A quick flash of white', len:0.5, dip:true },
+  { id:'cut',      group:'Lively', name:'Cut',           note:'Straight to the next photo', len:0 }
+];
+var FPS = 30, FADE_IN = 0.6, FADE_OUT = 1.0, MAX_LEN = 60, PREVIEW_EDGE = 1280, MAX_DUR = 8;
 
 var settings = {
-  format:'16x9', pace:'luxury', transition:'dissolve', letterbox:false,
+  format:'16x9', pace:'luxury', motion:'auto', transition:'dissolve', letterbox:false,
   text:{ openTitle:'', openSub:'', closeTitle:'', closeSub:'', font:'serif', size:'m', pos:'centre', colour:'white' }
 };
 (function restore(s){
   if(!s) return;
-  ['format', 'pace', 'transition', 'letterbox'].forEach(function(k){ if(k in s) settings[k] = s[k]; });
+  ['format', 'pace', 'motion', 'transition', 'letterbox'].forEach(function(k){ if(k in s) settings[k] = s[k]; });
   if(s.text) Object.keys(settings.text).forEach(function(k){ if(k in s.text) settings.text[k] = s.text[k]; });
+  [[FORMATS, 'format'], [PACES, 'pace'], [CAMERA, 'motion'], [BLENDS, 'transition']].forEach(function(o){
+    if(!o[0].some(function(x){ return x.id === settings[o[1]]; })) settings[o[1]] = o[0][0].id;
+  });
 })(T.savedVideo());
 
 function save(){ T.saveVideo(JSON.parse(JSON.stringify(settings))); }
 function byId(list, id){ return list.filter(function(x){ return x.id === id; })[0] || list[0]; }
 function format(){ return byId(FORMATS, settings.format); }
 function pace(){ return byId(PACES, settings.pace); }
-// How long a dissolve or a dip through black lasts, and how much neighbouring photos overlap.
-function transLen(){ return settings.transition === 'cut' ? 0 : pace().trans; }
-function overlap(){ return settings.transition === 'dissolve' ? pace().trans : 0; }
+function blend(){ return byId(BLENDS, settings.transition); }
+// How long a blend lasts, and how much neighbouring photos overlap.
+function transLen(){ var b = blend(); return b.len != null ? b.len : Math.min(b.max || Infinity, pace().trans*(b.scale || 1)); }
+function overlap(){ return blend().dip ? 0 : transLen(); }
 function minDur(){ return Math.max(2, Math.round((overlap() + 0.6)*10)/10); }
+// The shortest a video of n photos can be, with every photo at its minimum.
+function shortest(n){ return n ? n*minDur() - (n - 1)*overlap() : 0; }
+function maxPhotos(){ var ov = overlap(); return Math.floor((MAX_LEN - ov)/(minDur() - ov) + 1e-6); }
 
 function clamp01(v){ return Math.min(1, Math.max(0, v)); }
 function smooth(x){ x = clamp01(x); return x*x*(3 - 2*x); }
 function lerp(a, b, t){ return a + (b - a)*t; }
 // Camera moves keep some speed at their ends, so a dissolve never shows a frozen photo.
 function ease(p){ return 0.75*p + 0.25*smooth(p); }
+// Blends: speeding up, slowing down, and both.
+function easeIn(x){ x = clamp01(x); return x*x*x; }
+function easeOut(x){ x = 1 - clamp01(x); return 1 - x*x*x; }
+function inOut(x){ x = clamp01(x); return x < 0.5 ? 4*x*x*x : 1 - 4*(1 - x)*(1 - x)*(1 - x); }
 function mmss(t){ var s = Math.round(t); return Math.floor(s/60) + ':' + ('0' + s%60).slice(-2); }
 
 /* ============================== timeline ============================== */
@@ -63,11 +102,11 @@ var segs = [], total = 0, selected = -1;
 function newClip(it){ return { item:it, dur:pace().dur, motion:'auto', focus:{ x:0.5, y:0.5 }, caption:'' }; }
 function clipOf(it){ return clips.filter(function(c){ return c.item === it; })[0]; }
 
-// A first timeline: every photo if they fit about a minute at this pace,
+// A first timeline: every photo if they fit in a minute at this pace,
 // otherwise an even spread across the set (a mix of outside, inside, aerial).
 function defaultClips(){
   var photos = T.photos(), P = pace(), ov = overlap();
-  var fit = Math.max(1, Math.floor((DEFAULT_LENGTH - ov)/(P.dur - ov)));
+  var fit = Math.max(1, Math.floor((MAX_LEN - ov)/(P.dur - ov)));
   var pick = photos;
   if(photos.length > fit){
     pick = [];
@@ -78,9 +117,10 @@ function defaultClips(){
 }
 
 // Keeps the timeline in step with the loaded photos: removed photos drop out,
-// photos added since join the end.
+// photos added since join the end, as many as fit in a minute. Says so if
+// that meant shortening the photos or leaving some out.
 function sync(){
-  var photos = T.photos();
+  var photos = T.photos(), left = 0;
   clips = clips.filter(function(c){ return photos.indexOf(c.item) >= 0; });
   seen = seen.filter(function(it){ return photos.indexOf(it) >= 0; });
   previews = previews.filter(function(p){
@@ -89,9 +129,37 @@ function sync(){
     return false;
   });
   if(!clips.length) defaultClips();
-  else photos.forEach(function(it){ if(seen.indexOf(it) < 0){ seen.push(it); clips.push(newClip(it)); } });
+  else photos.forEach(function(it){
+    if(seen.indexOf(it) >= 0) return;
+    seen.push(it);
+    if(shortest(clips.length + 1) <= MAX_LEN + 1e-6) clips.push(newClip(it));
+    else left++;
+  });
   if(selected >= clips.length) selected = clips.length - 1;
+  var shortened = capLength();
+  if(left) T.say('A video can be up to a minute, so ' + left + (left === 1 ? ' new photo wasn’t' : ' new photos weren’t') +
+                 ' added. Swap photos in under Photos in the video.', false);
+  else if(shortened) T.say('Kept to a minute: the photos are now a little shorter.', false);
+}
+
+// Videos are capped at a minute. When the timeline runs over, every photo
+// shortens by the same share (none below its minimum). Returns true if it had
+// to, false if it didn't, null if even the shortest timeline is over a minute.
+function capLength(){
   layout();
+  if(total <= MAX_LEN + 1e-6) return false;
+  if(shortest(clips.length) > MAX_LEN + 1e-6) return null;
+  var ov = overlap(), min = minDur(), sum = 0;
+  clips.forEach(function(c){ sum += c.dur; });
+  var k = (MAX_LEN + (clips.length - 1)*ov)/sum;
+  clips.forEach(function(c){ c.dur = Math.max(min, Math.floor(c.dur*k*10 + 1e-6)/10); });
+  layout();
+  while(total > MAX_LEN + 1e-6){   // photos held at their minimum can leave it a touch over
+    var longest = clips.reduce(function(a, c){ return c.dur > a.dur ? c : a; });
+    longest.dur = Math.round((longest.dur - 0.1)*10)/10;
+    layout();
+  }
+  return true;
 }
 
 function layout(){
@@ -104,23 +172,71 @@ function layout(){
   total = segs.length ? segs[segs.length - 1].end : 0;
 }
 
-// Which photos are on screen at time t and how opaque, and how dark the frame
-// is: it fades in from black, out to black, and dips between photos.
+// What's on screen at time t: the photos, each with how it's drawn for the
+// blend it's in, and what's laid over them (fx): black for the fades in and out
+// and dips, white for a flash, a glow, film light, a slide's shadow.
 function stateAt(t){
-  var tl = transLen(), half = tl/2, layers = [], dark = 0;
+  var b = blend(), len = transLen(), half = len/2, layers = [];
+  var fx = { dark:0, white:0, glow:0, leak:0, leakAt:0, shade:0 };
   segs.forEach(function(s){
     if(t < s.start || t >= s.end) return;
-    var alpha = 1;
-    if(settings.transition === 'dissolve' && s.index > 0) alpha = smooth((t - s.start)/tl);
-    if(settings.transition === 'dip'){
-      if(s.index > 0 && t < s.start + half) dark = Math.max(dark, 1 - (t - s.start)/half);
-      if(s.index < segs.length - 1 && t > s.end - half) dark = Math.max(dark, (t - (s.end - half))/half);
+    if(b.dip && len){
+      if(s.index > 0 && t < s.start + half) dipTo(fx, b.id, 1 - (t - s.start)/half, false);
+      if(s.index < segs.length - 1 && t > s.end - half) dipTo(fx, b.id, (t - (s.end - half))/half, true);
     }
-    layers.push({ seg:s, p:clamp01((t - s.start)/s.clip.dur), alpha:alpha });
+    layers.push({ seg:s, p:clamp01((t - s.start)/s.clip.dur), alpha:1 });
   });
-  if(t < FADE_IN) dark = Math.max(dark, 1 - t/FADE_IN);
-  if(t > total - FADE_OUT) dark = Math.max(dark, (t - (total - FADE_OUT))/FADE_OUT);
-  return { layers:layers, dark:clamp01(dark) };
+  if(layers.length > 1) mixLayers(b.id, clamp01((t - layers[1].seg.start)/len), layers[0], layers[1], fx);
+  if(t < FADE_IN) fx.dark = Math.max(fx.dark, 1 - t/FADE_IN);
+  if(t > total - FADE_OUT) fx.dark = Math.max(fx.dark, (t - (total - FADE_OUT))/FADE_OUT);
+  fx.dark = clamp01(fx.dark);
+  return { layers:layers, fx:fx };
+}
+
+// Through black, or a flash of white; k is 1 right at the change of photo.
+// A flash builds fast at the end of one photo and fades out over the next.
+function dipTo(fx, id, k, leaving){
+  if(id === 'flash') fx.white = Math.max(fx.white, leaving ? k*k*k : k*k);
+  else fx.dark = Math.max(fx.dark, k);
+}
+
+// Two photos on screen at once: A leaving, B arriving, q running 0 to 1 across
+// the blend. Sets how each is drawn (alpha, shift, zoom, blur, mask) and fx.
+// Moves go right to left, like the Pan camera move.
+function mixLayers(id, q, A, B, fx){
+  var a = easeIn(q/0.5), b = 1 - easeOut((q - 0.5)/0.5), v;
+  if(id === 'dissolve') B.alpha = smooth(q);
+  else if(id === 'bloom'){
+    B.mask = [2, smooth(q), 0.6];
+    fx.glow = 0.1*Math.sin(Math.PI*q);
+  }else if(id === 'leak'){
+    B.alpha = smooth(q);
+    fx.leak = Math.pow(Math.sin(Math.PI*q), 1.3);
+    fx.leakAt = q;
+  }else if(id === 'blur'){
+    A.blur = [3, 0.022*smooth(q/0.55)];
+    B.blur = [3, 0.022*(1 - smooth((q - 0.45)/0.55))];
+    B.alpha = smooth((q - 0.2)/0.6);
+    fx.glow = 0.08*Math.sin(Math.PI*q);
+  }else if(id === 'wipe'){
+    B.mask = [1, inOut(q), 0.14];
+  }else if(id === 'slide'){
+    // B covers A from the right; A eases back and darkens under its shadow
+    v = q < 0.5 ? 4*q*q : 4*(1 - q)*(1 - q);   // speed, 1 at the middle
+    B.shift = [1 - inOut(q), 0]; B.edge = true;
+    B.blur = [1, Math.min(0.12, 0.05*v/transLen())];
+    A.shift = [-0.3*inOut(q), 0];
+    A.blur = [1, Math.min(0.04, 0.015*v/transLen())];
+    fx.shade = inOut(q);
+  }else if(id === 'zoom'){
+    A.zoom = 1 + 1.4*a; A.blur = [2, 0.35*a];
+    B.zoom = 1 + 1.4*b; B.blur = [2, 0.35*b];
+    B.alpha = smooth((q - 0.4)/0.2);
+  }else if(id === 'whip'){
+    A.shift = [-0.5*a, 0]; A.blur = [1, 0.4*a];
+    B.shift = [0.5*b, 0];  B.blur = [1, 0.4*b];
+    B.alpha = smooth((q - 0.42)/0.16);
+  }
 }
 
 /* ============================== camera moves ============================== */
@@ -135,7 +251,12 @@ function autoMotion(seg){
           : ['in', 'right', 'out', 'left', 'in', 'up'];
   return seq[seg.index % seq.length];
 }
-function motionOf(seg){ return seg.clip.motion === 'auto' ? autoMotion(seg) : seg.clip.motion; }
+// A photo's own move, else the video's. Pan always heads right, so the whole
+// video travels one way, like a camera on a track.
+function motionOf(seg){
+  var m = seg.clip.motion === 'auto' ? settings.motion : seg.clip.motion;
+  return m === 'auto' ? autoMotion(seg) : m === 'pan' ? 'right' : m;
+}
 
 // The part of an iw x ih photo on screen at eased progress e, as [x, y, w, h]
 // fractions. frameFor (from the crop tool) fits the video's shape inside the
@@ -150,6 +271,11 @@ function viewAt(seg, e, iw, ih){
   }else if(m === 'still'){
     a = { cx:fx, cy:fy, zoom:1.03 };
     b = { cx:fx, cy:fy, zoom:1.03 + P.zoom*0.3 };
+  }else if(m === 'diag'){
+    // ease in while drifting corner to corner, the other way on alternate photos
+    var sx = seg.index % 2 ? -1 : 1;
+    a = { cx:fx - sx*P.pan*0.3, cy:fy - P.pan*0.2, zoom:1 + P.zoom*0.3 };
+    b = { cx:fx + sx*P.pan*0.3, cy:fy + P.pan*0.2, zoom:1 + P.zoom*1.1 };
   }else{
     // pans: zoom in a little for room, then travel across what's there
     var z = 1 + P.zoom*0.8, across = m === 'left' || m === 'right';
@@ -158,7 +284,7 @@ function viewAt(seg, e, iw, ih){
     var travel = Math.min(1 - size, P.pan*(across && f.h > f.w ? 2 : 1));
     var mid = Math.min(Math.max(across ? fx : fy, size/2 + travel/2), 1 - size/2 - travel/2);
     var from = mid + travel/2, to = mid - travel/2;   // left and up head towards 0
-    if(m === 'right'){ var swap = from; from = to; to = swap; }
+    if(m === 'right' || m === 'down'){ var swap = from; from = to; to = swap; }
     a = across ? { cx:from, cy:fy, zoom:z } : { cx:fx, cy:from, zoom:z };
     b = across ? { cx:to, cy:fy, zoom:z } : { cx:fx, cy:to, zoom:z };
   }
@@ -261,21 +387,87 @@ var shownView = null;   // where the selected photo sits on screen in the last p
 // the photo's texture, or nothing yet. The preview and the export share this.
 function paintFrame(ctx, W, H, t, seed, texFor, grade){
   t = Math.min(Math.max(t, 0), Math.max(0, total - 1e-4));
-  var st = stateAt(t), drawn = 0;
+  var st = stateAt(t), fx = st.fx, drawn = 0;
   st.layers.forEach(function(L){
     var tex = texFor(L.seg.clip);
     if(!tex) return;
     var view = viewAt(L.seg, ease(L.p), tex.w, tex.h);
+    if(L.zoom) view = zoomView(view, L.zoom);
     if(L.seg.index === selected) shownView = view;
-    R.draw(W, H, tex, 1, grade, { region:view, frame:view, aspect:tex.w/tex.h, alpha:drawn ? L.alpha : 1, seed:seed });
+    var first = !drawn;   // the first photo drawn always fills the frame
+    R.draw(W, H, tex, 1, grade, { region:view, frame:view, aspect:tex.w/tex.h, seed:seed,
+      alpha:first ? 1 : L.alpha, mask:first ? null : L.mask, edge:!first && L.edge,
+      shift:L.shift, blur:blurFor(L.blur, W, H) });
     drawn++;
   });
   if(drawn) ctx.drawImage(glc, 0, 0, W, H);
   else{ ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
   var bar = barHeight(W, H);
+  if(fx.shade) paintShade(ctx, W, H, fx.shade);
+  if(fx.leak) paintLeak(ctx, W, H, fx.leak, fx.leakAt);
+  if(fx.glow) wash(ctx, 0, W, H, 'rgba(255,255,255,' + fx.glow.toFixed(3) + ')', 'screen');
   if(bar){ ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar); }
   drawText(ctx, W, H, t);
-  if(st.dark > 0){ ctx.fillStyle = 'rgba(0,0,0,' + st.dark + ')'; ctx.fillRect(0, 0, W, H); }
+  if(fx.white > 0) wash(ctx, bar, W, H - 2*bar, 'rgba(255,255,255,' + fx.white.toFixed(3) + ')');
+  if(fx.dark > 0){ ctx.fillStyle = 'rgba(0,0,0,' + fx.dark + ')'; ctx.fillRect(0, 0, W, H); }
+}
+
+// A view zoomed in by z about its centre.
+function zoomView(v, z){
+  var w = v[2]/z, h = v[3]/z;
+  return [v[0] + (v[2] - w)/2, v[1] + (v[3] - h)/2, w, h];
+}
+
+// A blend's blur for the shader, [kind, amount, mip bias]: the bias softens
+// each of the 16 taps by about the gap between them, so streaks stay smooth.
+function blurFor(b, W, H){
+  if(!b || !b[1]) return null;
+  var reach = b[0] === 1 ? b[1]*W : b[0] === 2 ? b[1]*Math.hypot(W, H)/4 : b[1]*H;
+  var gap = b[0] === 3 ? reach*0.44 : reach/16;
+  return [b[0], b[1], Math.log2(Math.max(1, gap))];
+}
+
+function wash(ctx, y, W, h, colour, mode){
+  ctx.save();
+  if(mode) ctx.globalCompositeOperation = mode;
+  ctx.fillStyle = colour;
+  ctx.fillRect(0, y, W, h);
+  ctx.restore();
+}
+
+// A slide's shadow: the photo underneath dims, darkest along the incoming edge.
+function paintShade(ctx, W, H, e){
+  var x = (1 - e)*W, w = W*0.06;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,' + (0.28*e).toFixed(3) + ')';
+  ctx.fillRect(0, 0, x, H);
+  var g = ctx.createLinearGradient(x - w, 0, x, 0);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,' + (0.3*Math.min(1, e*5)*(1 - e)).toFixed(3) + ')');
+  ctx.fillStyle = g;
+  ctx.fillRect(x - w, 0, w, H);
+  ctx.restore();
+}
+
+// Film light: a hot amber glow running along the top of the frame with a
+// redder one trailing lower down, screened over the picture and sweeping left
+// to right as the photos blend. k is how strong, at how far through.
+var LEAKS = [
+  { x:-0.3, y:0.18, r:0.62, stops:[[0, '255,228,178', 0.9], [0.22, '255,158,72', 0.62], [0.55, '222,72,42', 0.24], [1, '150,24,30', 0]] },
+  { x:-0.75, y:0.78, r:0.5, stops:[[0, '255,118,74', 0.5], [0.5, '212,52,52', 0.16], [1, '140,20,40', 0]] }
+];
+function paintLeak(ctx, W, H, k, at){
+  var big = Math.max(W, H);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  LEAKS.forEach(function(L){
+    var x = (L.x + 1.6*at)*W, y = L.y*H;
+    var g = ctx.createRadialGradient(x, y, 0, x, y, L.r*big);
+    L.stops.forEach(function(s){ g.addColorStop(s[0], 'rgba(' + s[1] + ',' + (s[2]*k).toFixed(3) + ')'); });
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  });
+  ctx.restore();
 }
 
 /* ============================== preview ============================== */
@@ -316,6 +508,7 @@ function previewTex(clip){
 }
 
 var active = false, playing = false, pos = 0, clock = 0, clockPos = 0, drawQueued = false;
+var stopAt = null;   // a preview of a blend or camera move plays to here, then pauses
 
 function previewSize(){
   var f = format(), s = Math.min(1, PREVIEW_EDGE/Math.max(f.w, f.h));
@@ -323,6 +516,7 @@ function previewSize(){
 }
 
 function refresh(){
+  if(active && tilesShown()) queueTiles();
   if(!active || drawQueued || playing) return;
   drawQueued = true;
   requestAnimationFrame(function(){ drawQueued = false; drawPreview(); });
@@ -355,21 +549,30 @@ function drawPreview(){
   placeFocus();
 }
 
-function play(){
+function play(until){
   if(!clips.length || exporting) return;
-  if(pos >= total - 0.05) pos = 0;
+  stopAt = until == null ? null : until;
+  if(stopAt == null && pos >= total - 0.05) pos = 0;
+  var wasPlaying = playing;
   playing = true;
   clock = performance.now(); clockPos = pos;
   updatePlay();
-  requestAnimationFrame(tick);
+  if(!wasPlaying) requestAnimationFrame(tick);
 }
-function pause(){ playing = false; updatePlay(); refresh(); }
+function pause(){ playing = false; stopAt = null; updatePlay(); refresh(); }
 function tick(now){
   if(!playing || !active) return;
   pos = clockPos + (now - clock)/1000;
-  if(pos >= total){ pos = total; playing = false; updatePlay(); }
+  if(stopAt != null && pos >= stopAt){ pos = stopAt; playing = false; stopAt = null; updatePlay(); }
+  else if(pos >= total){ pos = total; playing = false; updatePlay(); }
   drawPreview();
   if(playing) requestAnimationFrame(tick);
+}
+// Plays from one time to another, then pauses there.
+function playRange(from, to){
+  if(!clips.length || exporting) return;
+  pos = Math.min(Math.max(from, 0), total);
+  play(Math.min(Math.max(to, pos), total));
 }
 function seek(t){
   pos = Math.min(Math.max(t, 0), total);
@@ -415,6 +618,7 @@ vCanvas.addEventListener('click', function(e){
 
 function bindPlayer(){
   $('vPlay').addEventListener('click', function(){ playing ? pause() : play(); });
+  $('tabAnimate').addEventListener('click', function(){ tilesQueued = false; updateTiles(); });
   $('vScrub').addEventListener('input', function(e){ seek(parseFloat(e.target.value)*total); });
   $('vExportBtn').addEventListener('click', exportVideo);
   window.addEventListener('resize', function(){ if(active){ placeHead(); placeFocus(); } });
@@ -508,7 +712,7 @@ function changed(rebuildClip){
   buildTrack();
   buildPick();
   if(rebuildClip) buildClipSec();
-  $('vLen').textContent = mmss(total);
+  $('vLen').textContent = lenText();
   updateExport();
   save();
   refresh();
@@ -535,8 +739,16 @@ function moveClip(from, to){
 function toggleItem(it){
   if(exporting) return;
   var c = clipOf(it);
-  if(c) removeClip(clips.indexOf(c));
-  else{ clips.push(newClip(it)); changed(false); loadPreviews(); }
+  if(c){ removeClip(clips.indexOf(c)); return; }
+  if(shortest(clips.length + 1) > MAX_LEN + 1e-6){
+    T.say('A video can be up to a minute, which fits ' + maxPhotos() + ' photos with this pace and blend.', false);
+    return;
+  }
+  clips.push(newClip(it));
+  var capped = capLength();
+  changed(!!capped);
+  loadPreviews();
+  if(capped) T.say('Kept to a minute: the photos are now a little shorter.', false);
 }
 
 // Spreads the photos evenly so the video lasts about this long.
@@ -546,6 +758,7 @@ function fitTo(seconds){
   var want = (seconds + (n - 1)*ov)/n;
   var d = Math.round(Math.min(MAX_DUR, Math.max(minDur(), want))*10)/10;
   clips.forEach(function(c){ c.dur = d; });
+  capLength();   // rounding up can tip a minute over
   changed(true);
   if(Math.abs(d - want) > 0.05){
     T.say(want > d ? 'That needs more photos: each one is already at the ' + MAX_DUR + ' s maximum.'
@@ -572,9 +785,8 @@ function choice(options, current, onPick, cls){
     b.dataset.v = o[0];
     b.setAttribute('aria-pressed', o[0] === current ? 'true' : 'false');
     b.addEventListener('click', function(){
-      if(exporting) return;
+      if(exporting || onPick(o[0]) === false) return;   // false: the change was refused
       Array.prototype.forEach.call(g.children, function(n){ n.setAttribute('aria-pressed', n === b ? 'true' : 'false'); });
-      onPick(o[0]);
     });
     g.appendChild(b);
   });
@@ -624,13 +836,25 @@ function buildPanel(){
     grid.appendChild(b);
   });
   shape.appendChild(grid);
+  var bars = el('label', 'vtoggle');
+  bars.id = 'vBars';
+  bars.hidden = settings.format !== '16x9';
+  var cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = settings.letterbox;
+  cb.addEventListener('change', function(){ settings.letterbox = cb.checked; save(); refresh(); });
+  bars.appendChild(cb);
+  bars.appendChild(document.createTextNode('Cinematic bars'));
+  shape.appendChild(bars);
   p.appendChild(shape);
 
   var paceSec = section('Pace', 'vLen');
   paceSec.appendChild(choice(PACES.map(function(x){ return [x.id, x.name]; }), settings.pace, function(v){
-    settings.pace = v;
-    clips.forEach(function(c){ c.dur = pace().dur; });
-    changed(true);
+    var old = settings.pace;
+    return within(function(){
+      settings.pace = v;
+      clips.forEach(function(c){ c.dur = pace().dur; });
+    }, function(){ settings.pace = old; }, byId(PACES, v).name);
   }));
   var fits = el('div', 'vfits');
   fits.appendChild(document.createTextNode('Fit to'));
@@ -643,25 +867,8 @@ function buildPanel(){
   });
   fits.appendChild(fitChips);
   paceSec.appendChild(fits);
+  paceSec.appendChild(el('p', 'small anote', 'Videos can be up to a minute. Camera moves and blends are in the Animation tab.'));
   p.appendChild(paceSec);
-
-  var trans = section('Transitions');
-  trans.appendChild(choice(TRANSITIONS, settings.transition, function(v){
-    settings.transition = v;
-    clips.forEach(function(c){ c.dur = Math.max(c.dur, minDur()); });
-    changed(true);
-  }));
-  var bars = el('label', 'vtoggle');
-  bars.id = 'vBars';
-  bars.hidden = settings.format !== '16x9';
-  var cb = el('input');
-  cb.type = 'checkbox';
-  cb.checked = settings.letterbox;
-  cb.addEventListener('change', function(){ settings.letterbox = cb.checked; save(); refresh(); });
-  bars.appendChild(cb);
-  bars.appendChild(document.createTextNode('Cinematic bars'));
-  trans.appendChild(bars);
-  p.appendChild(trans);
 
   var text = section('Text');
   text.appendChild(label('Opening'));
@@ -687,7 +894,158 @@ function buildPanel(){
   pick.appendChild(pickGrid);
   p.appendChild(pick);
 
-  $('vLen').textContent = mmss(total);
+  $('vLen').textContent = lenText();
+  buildAnimPanel();
+}
+
+function lenText(){ return mmss(total) + ' of ' + mmss(MAX_LEN); }
+
+// Applies a change of pace or blend, keeping the video within a minute: the
+// photos shorten evenly if they must. If even that can't fit them all, the
+// change is undone and this returns false.
+function within(apply, undo, name){
+  var durs = clips.map(function(c){ return c.dur; });
+  apply();
+  var capped = capLength();
+  if(capped === null){
+    var n = maxPhotos();
+    undo();
+    clips.forEach(function(c, i){ c.dur = durs[i]; });
+    layout();
+    T.say(name + ' fits up to ' + n + ' photos in a minute. Take some out under Photos in the video first.');
+    return false;
+  }
+  changed(true);
+  if(capped) T.say('Kept to a minute: the photos are now a little shorter.', false);
+  return true;
+}
+
+/* ============================== animation tab ============================== */
+
+// The camera move and the blend for the whole video, as tiles that preview
+// themselves with small graded stills of the first two photos.
+function buildAnimPanel(){
+  var p = $('vAnimPanel');
+  p.textContent = '';
+  var cam = section('Camera move');
+  cam.appendChild(tiles(CAMERA, 'm', settings.motion, function(v){
+    settings.motion = v;
+    save();
+    buildTrack();
+    buildClipSec();
+    previewMove();
+  }, 'To give one photo its own move, select it on the timeline.'));
+  p.appendChild(cam);
+  var bl = section('Blend between photos');
+  bl.appendChild(tiles(BLENDS, 'b', settings.transition, function(v){
+    var old = settings.transition;
+    var ok = within(function(){
+      settings.transition = v;
+      clips.forEach(function(c){ c.dur = Math.max(c.dur, minDur()); });
+    }, function(){ settings.transition = old; }, byId(BLENDS, v).name);
+    if(ok) previewBlend();
+    return ok;
+  }));
+  p.appendChild(bl);
+  tileKey = '';
+  updateTiles();
+}
+
+function tiles(list, kind, current, onPick, extra){
+  var wrap = el('div'), grid = el('div', 'atiles'), note = el('p', 'small anote'), group = null;
+  grid.setAttribute('role', 'group');
+  var describe = function(x){
+    note.textContent = x.name + ': ' + x.note.charAt(0).toLowerCase() + x.note.slice(1) + '.' + (extra ? ' ' + extra : '');
+  };
+  list.forEach(function(x){
+    if(x.group && x.group !== group){ group = x.group; grid.appendChild(el('h4', 'agroup', group)); }
+    var b = el('button', 'atile ' + kind + '-' + x.id);
+    b.type = 'button';
+    b.title = x.note;
+    b.setAttribute('aria-pressed', x.id === current ? 'true' : 'false');
+    var pv = el('span', 'apv');
+    pv.appendChild(tileImg('a'));
+    if(kind === 'b'){ pv.appendChild(tileImg('b')); pv.appendChild(el('i', 'fx')); }
+    b.appendChild(pv);
+    b.appendChild(el('span', 'nm', x.name));
+    b.addEventListener('click', function(){
+      if(exporting || onPick(x.id) === false) return;
+      Array.prototype.forEach.call(grid.querySelectorAll('.atile'), function(n){ n.setAttribute('aria-pressed', n === b ? 'true' : 'false'); });
+      describe(x);
+    });
+    grid.appendChild(b);
+    if(x.id === current) describe(x);
+  });
+  wrap.appendChild(grid);
+  wrap.appendChild(note);
+  return wrap;
+}
+
+function tileImg(cls){ var i = el('img', cls); i.alt = ''; return i; }
+
+var tileUrls = [null, null], tileKey = '', tileTimer = 0, tilesQueued = false;
+var ids = new WeakMap(), nextId = 1;
+function idOf(it){ if(!ids.has(it)) ids.set(it, nextId++); return ids.get(it); }
+
+function tilesShown(){ var p = $('paneAnimate'); return !!p && !p.hidden; }
+
+// Grade changes arrive on every slider tick, so redraw the stills once they settle.
+function queueTiles(){
+  if(tilesQueued) return;
+  tilesQueued = true;
+  clearTimeout(tileTimer);
+  tileTimer = setTimeout(function(){ tilesQueued = false; updateTiles(); }, 250);
+}
+
+function updateTiles(){
+  if(!active || exporting || !tilesShown()) return;
+  var cs = clips.slice(0, 2), grade = T.grade();
+  if(cs.length === 1) cs.push(cs[0]);
+  var key = cs.map(function(c){ var p = previewOf(c.item); return idOf(c.item) + (p && p.bm ? 'b' : c.item.thumb ? 't' : '-'); }).join('|') +
+            JSON.stringify(grade);
+  if(key === tileKey) return;
+  tileKey = key;
+  tileUrls = cs.map(function(c){ return still(c, grade); });
+  Array.prototype.forEach.call($('vAnimPanel').querySelectorAll('.apv'), function(pv){
+    var a = pv.querySelector('.a'), b = pv.querySelector('.b');
+    if(tileUrls[0]) a.src = tileUrls[0]; else a.removeAttribute('src');
+    if(b){ if(tileUrls[1]) b.src = tileUrls[1]; else b.removeAttribute('src'); }
+  });
+}
+
+// A small 4:3 still of a photo with the current look, or its plain thumbnail
+// until the preview has loaded.
+function still(c, grade){
+  var p = previewOf(c.item);
+  if(!p || !p.bm) return c.item.thumb || null;
+  var tex = previewTex(c), W = 320, H = 240;
+  var view = T.frameFor({ cx:0.5, cy:0.5, zoom:1 }, tex.w, tex.h, { w:W, h:H });
+  R.draw(W, H, tex, 1, grade, { region:view, frame:view, aspect:tex.w/tex.h });
+  var cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  cv.getContext('2d').drawImage(glc, 0, 0);
+  return cv.toDataURL('image/jpeg', 0.85);
+}
+
+// After picking a blend, play the nearest change of photo so you can see it.
+function previewBlend(){
+  if(segs.length < 2){ refresh(); return; }
+  var len = transLen(), dip = blend().dip, best = null;
+  segs.slice(1).forEach(function(s){
+    var from = dip ? s.start - len/2 : s.start, to = dip ? s.start + len/2 : s.start + len;
+    var d = Math.abs((from + to)/2 - pos);
+    if(!best || d < best.d) best = { from:from, to:to, d:d };
+  });
+  playRange(best.from - 0.8, best.to + 0.8);
+}
+
+// After picking a camera move, play some of a photo that uses it.
+function previewMove(){
+  var here = segs.filter(function(s){ return s.start <= pos && pos < s.end; })[0] || segs[0];
+  if(!here){ refresh(); return; }
+  var s = here.clip.motion === 'auto' ? here : segs.filter(function(x){ return x.clip.motion === 'auto'; })[0] || here;
+  var from = Math.max(FADE_IN, s.start + (s.index ? overlap() : 0));
+  playRange(from, Math.min(s.end, from + 3));
 }
 
 // Settings for the selected photo, at the top of the panel.
@@ -711,8 +1069,10 @@ function buildClipSec(){
   lab.htmlFor = 'vDur';
   var val = el('span', 'val', c.dur.toFixed(1) + ' s');
   var dur = el('input');
+  // as long as the rest of the video leaves room for, within a minute
+  var room = Math.min(MAX_DUR, Math.floor((c.dur + MAX_LEN - total)*10 + 1e-6)/10);
   dur.type = 'range'; dur.id = 'vDur';
-  dur.min = minDur(); dur.max = MAX_DUR; dur.step = 0.1; dur.value = c.dur;
+  dur.min = minDur(); dur.max = Math.max(minDur(), room); dur.step = 0.1; dur.value = c.dur;
   dur.addEventListener('input', function(){
     if(exporting) return;
     c.dur = parseFloat(dur.value);
@@ -721,13 +1081,18 @@ function buildClipSec(){
     var badge = $('vClips').children[selected].querySelector('.dur');
     if(badge) badge.textContent = c.dur.toFixed(1) + 's';
     $('vCount').textContent = countText();
-    $('vLen').textContent = mmss(total);
+    $('vLen').textContent = lenText();
     updateExport();
     seek(segs[selected].start + c.dur/2);
   });
   row.appendChild(lab); row.appendChild(val); row.appendChild(dur);
   box.appendChild(row);
   T.paintRange(dur);
+  if(room < MAX_DUR){
+    var most = el('p', 'small', 'Up to ' + Math.max(minDur(), room).toFixed(1) + ' s here, to keep the video within a minute.');
+    most.style.margin = '-4px 0 12px';
+    box.appendChild(most);
+  }
 
   box.appendChild(label('Camera move'));
   box.appendChild(choice(MOTIONS, c.motion, function(v){
@@ -785,7 +1150,7 @@ function buildPick(){
 
 // While exporting, the timeline and panel are read-only.
 function lock(on){
-  ['vPanel', 'vClips'].forEach(function(id){
+  ['vPanel', 'vAnimPanel', 'vClips'].forEach(function(id){
     Array.prototype.forEach.call($(id).querySelectorAll('button, input'), function(n){ n.disabled = on; });
   });
   Array.prototype.forEach.call($('vClips').children, function(n){ n.draggable = !on; });
@@ -936,7 +1301,7 @@ function enter(){
   buildTrack();
   buildPick();
   buildClipSec();
-  $('vLen').textContent = mmss(total);
+  $('vLen').textContent = lenText();
   updateExport();
   updatePlay();
   loadPreviews();

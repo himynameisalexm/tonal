@@ -58,18 +58,29 @@ Working:
 
 Video (the Photos / Video switch at the top):
 
-- Turns the loaded photos into a 30 s to 1 min film. If they won't all fit in about
-  a minute, it picks an even spread across the set; click photos under "Photos in
-  the video" to add or remove them
+- Turns the loaded photos into a film of up to a minute. If they won't all fit, it
+  picks an even spread across the set; click photos under "Photos in the video" to
+  add or remove them
+- Videos are capped at 60 s. Adding photos, or a pace or blend that needs more time,
+  shortens every photo evenly to fit; when even the shortest photos can't fit, the
+  change is refused and the message says how many photos would
 - Timeline of photo cards: drag to reorder, × to remove, click to select and jump to
   it. Space plays and pauses; the arrow keys step between photos
-- Slow camera moves on every photo: push in, pull out, pan left or right, rise, or
-  still. Auto varies them to suit each photo's shape and the video's shape. Click the
-  paused photo to set the point a push-in heads for
-- Pace: Luxury (4.5 s per photo, long dissolves, subtle moves), Standard or Quick,
-  plus Fit to 30 / 45 / 60 s. Each photo's length can be set from 2 to 8 s
-- Transitions: dissolve, through black, or cut. It always fades in from black and
-  out to black. Optional 2.39:1 cinematic bars on 16:9
+- Animation tab: two lists of tiles, each playing a little preview of itself with
+  your first two photos and the current look. Picking one plays it on the stage
+  - Camera move: Mixed (push-ins, pans and rises varied to suit each photo's shape
+    and the video's), Push in, Pull out, Pan (one direction, like a camera on a
+    track), Rise, Drift (a slow diagonal ease-in) or Still. Any photo can have its
+    own move (including Pan left / right and Lower); click the paused photo to set
+    the point a push-in heads for
+  - Blend between photos: Dissolve, Bloom (the next photo glows in through its
+    highlights), Light leak (warm film light sweeps across), Soft focus, Wipe (a soft
+    angled edge), Slide (the next photo glides in over the last, with motion blur),
+    Fade to black, Zoom (rushes in and out with a zoom blur), Whip pan, Flash, or Cut
+- Pace: Luxury (4.5 s per photo, long blends, subtle moves), Standard or Quick, plus
+  Fit to 30 / 45 / 60 s. Each photo's length can be set from 2 to 8 s
+- It always fades in from black and out to black. Optional 2.39:1 cinematic bars
+  on 16:9
 - Text: an opening title and subtitle, a closing title and subtitle, and an optional
   caption per photo. Serif or sans, three sizes, centre / bottom left / bottom
   centre, white or black. On 9:16 it stays clear of where Reels and Stories put
@@ -82,8 +93,8 @@ Video (the Photos / Video switch at the top):
   up-to-3840 px decodes of the originals, with mipmapped textures so fine detail
   doesn't shimmer as the camera moves. A 45 s video from twelve 8192 px photos takes
   about 11 s on an M1 Pro Mac
-- The video settings (shape, pace, transitions, text) are remembered; the photo
-  order and per-photo moves aren't
+- The video settings (shape, pace, camera move, blend, text) are remembered; the
+  photo order and per-photo moves aren't
 
 Known gaps:
 
