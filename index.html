@@ -119,6 +119,21 @@ h1,h2,h3,p{margin:0}
 .empty .btn.ghost:hover{border-color:#f6f6f6}
 .empty .fine{font-size:12px;color:#6f6f6f}
 
+/* compare divider, laid over the photo */
+.split{position:absolute;z-index:2;cursor:ew-resize;touch-action:none;user-select:none;-webkit-user-select:none}
+.split-line{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+.split-knob{
+  position:absolute;top:50%;left:50%;width:42px;height:42px;margin:-21px 0 0 -21px;padding:0;
+  display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;
+  background:#fff;color:#141414;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:ew-resize;
+}
+.split-knob:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.split-tag{
+  position:absolute;top:10px;left:10px;padding:4px 10px;border-radius:999px;pointer-events:none;
+  background:rgba(20,20,20,.6);color:#fff;font-size:11px;font-weight:600;
+}
+.split-tag.edited{left:auto;right:10px}
+
 .stage-bar{display:flex;align-items:center;gap:10px;min-height:34px;font-size:13px}
 .stage-bar .fname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .stage-bar .dims{color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -181,6 +196,15 @@ h1,h2,h3,p{margin:0}
 .look.wide[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
 .look.wide[aria-pressed="true"] .sw,.look.wide:hover .sw{box-shadow:none}
 .lookgroup{grid-column:1/-1;margin:8px 0 -4px}
+.create{padding:14px;margin-bottom:18px;background:var(--surface-2);border-radius:var(--radius-sm)}
+.createrow{display:flex;gap:8px}
+.createrow input{
+  flex:1;min-width:0;border:1px solid var(--line-strong);background:var(--surface);
+  border-radius:999px;padding:9px 15px;font-size:13px;
+}
+.createrow input:focus{outline:none;border-color:var(--ink)}
+.matchbtn{width:100%;margin-top:8px}
+.createnote{margin-top:10px;color:var(--ink-2)}
 .saverow{display:flex;gap:8px;margin-top:14px}
 .saverow input{
   flex:1;min-width:0;border:1px solid var(--line-strong);background:var(--surface);
@@ -321,12 +345,22 @@ select:focus-visible{outline:none;border-color:var(--ink)}
         <p class="fine">Folders work in desktop Chrome, Edge, Firefox and Safari. On a phone or tablet, choose photos.</p>
       </div>
       <canvas id="gl" class="hidden"></canvas>
+      <div class="split" id="split" hidden>
+        <span class="split-tag">Original</span>
+        <span class="split-tag edited">Edited</span>
+        <div class="split-line" id="splitLine">
+          <button class="split-knob" id="splitKnob" role="slider" aria-label="Before and after divider"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7 4L2 9l5 5M11 4l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
     <div class="stage-bar" id="stageBar" hidden>
       <span class="fname" id="fname"></span>
       <span class="dims" id="dims"></span>
       <span class="spacer"></span>
-      <button class="pill" id="beforeBtn" aria-pressed="false" title="Show the original. Tip: hold \ for a quick peek.">Compare</button>
+      <button class="pill" id="beforeBtn" aria-pressed="false" title="Slide between the original and your edit. Tip: hold \ to see the whole original.">Compare</button>
     </div>
     <div class="strip" id="strip" hidden>
       <div class="strip-head"><span id="count"></span><span>One grade for every photo. Use ← → to browse.</span></div>
@@ -343,6 +377,16 @@ select:focus-visible{outline:none;border-color:var(--ink)}
       </div>
 
       <div class="pane" id="panePresets" role="tabpanel" aria-labelledby="tabPresets">
+        <div class="create">
+          <h3 class="section-title">Create a look</h3>
+          <form class="createrow" id="describeForm">
+            <input type="text" id="lookPrompt" maxlength="140" placeholder="Describe it, e.g. warm, moody, faded film" aria-label="Describe the look you want">
+            <button class="btn primary" type="submit">Create</button>
+          </form>
+          <button class="btn matchbtn" id="matchPhoto" type="button">Match a photo you like</button>
+          <input type="file" id="refInput" accept="image/*" hidden>
+          <p class="small createnote" id="createNote" hidden></p>
+        </div>
         <div class="looks" id="presetGrid"></div>
         <div class="block">
           <div class="row">
@@ -568,7 +612,8 @@ var VERT = '#version 300 es\n' +
 // u_frame is the crop frame in uv space (x, y, w, h). Vignette and grain are
 // placed relative to it, so the preview matches the cropped export. u_view is
 // the part of the image this draw covers, so big exports can be rendered in
-// strips. u_dim and u_grid are preview-only: shade outside the frame, thirds grid.
+// strips. u_dim, u_grid and u_split are preview-only: shade outside the frame,
+// thirds grid, and the compare divider (left of it shows the original).
 var FRAG = '#version 300 es\n' +
 'precision highp float;\n' +
 'in vec2 v_uv;\n' +
@@ -581,7 +626,7 @@ var FRAG = '#version 300 es\n' +
 'uniform float u_shAmt,u_hiAmt,u_balance;\n' +
 'uniform float u_aspect,u_mix;\n' +
 'uniform vec4 u_frame,u_view;\n' +
-'uniform float u_dim,u_grid;\n' +
+'uniform float u_dim,u_grid,u_split;\n' +
 'uniform float u_warmSat,u_warmLum,u_greenHue,u_greenSat,u_greenLum,u_blueSat,u_blueLum;\n' +
 'float s2l(float c){ return c<=0.04045 ? c/12.92 : pow((c+0.055)/1.055,2.4); }\n' +
 'float l2s(float c){ return c<=0.0031308 ? c*12.92 : 1.055*pow(c,1.0/2.4)-0.055; }\n' +
@@ -662,6 +707,7 @@ var FRAG = '#version 300 es\n' +
 '  c += n*u_grain*0.22*max(gw, 0.0);\n' +
 '  c = clamp(c, 0.0, 1.0);\n' +
 '  vec3 o = mix(src, c, u_mix);\n' +
+'  if(v_uv.x < u_split) o = src;\n' +
 '  if(u_dim > 0.0){\n' +
 '    vec2 px = fwidth(fuv);\n' +
 '    float inside = step(0.0, min(fuv.x, fuv.y)) * step(max(fuv.x, fuv.y), 1.0);\n' +
@@ -712,7 +758,7 @@ function initGL(){
 
   ['exposure','contrast','highlights','shadows','whites','blacks','temp','tint',
    'vibrance','saturation','fade','vignette','grain','shTint','hiTint','shAmt',
-   'hiAmt','balance','aspect','mix','frame','view','dim','grid','tex',
+   'hiAmt','balance','aspect','mix','frame','view','dim','grid','split','tex',
    'warmSat','warmLum','greenHue','greenSat','greenLum','blueSat','blueLum'].forEach(function(n){
     uni[n] = gl.getUniformLocation(prog, 'u_' + n);
   });
@@ -778,6 +824,7 @@ function draw(w, h, bitmap, mixAmount, grade, view){
   gl.uniform4f(uni.view,  r[0], r[1], r[2], r[3]);
   gl.uniform1f(uni.dim,  v.dim || 0);
   gl.uniform1f(uni.grid, v.grid ? 1 : 0);
+  gl.uniform1f(uni.split, v.split == null ? -1 : v.split);
 
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
@@ -907,8 +954,10 @@ function swatchCSS(p){
   return 'linear-gradient(135deg,' + sh + ' 0%,' + sh + ' 32%,' + hi + ' 100%)';
 }
 
+var generated = null;   // the look made by "Create a look": {id:'generated', name, p}
+
 function lookParams(id){
-  var pr = PRESETS.concat(customLooks).filter(function(p){ return p.id === id; })[0];
+  var pr = PRESETS.concat(customLooks, generated ? [generated] : []).filter(function(p){ return p.id === id; })[0];
   return pr ? Object.assign({}, DEFAULTS, pr.p) : null;
 }
 
@@ -1150,19 +1199,59 @@ Object.keys(TABS).forEach(function(k){
   $(TABS[k][0]).addEventListener('click', function(){ selectTab(k); });
 });
 
-/* -- before/after: click to stay on the original, hold \ for a quick peek -- */
-var beforeBtn = $('beforeBtn');
-var stickyBefore = false, peeking = false;
+/* -- before/after: Compare lays a divider over the photo (original on the left,
+      edit on the right) that you drag across; hold \ to see the whole original -- */
+var beforeBtn = $('beforeBtn'), splitEl = $('split'), splitLine = $('splitLine'), splitKnob = $('splitKnob');
+var comparing = false, splitAt = 0.5, splitDrag = null, peeking = false;
 
 function updateBefore(){
-  showBefore = (stickyBefore !== peeking);   // peek inverts whatever is showing
-  beforeBtn.setAttribute('aria-pressed', stickyBefore ? 'true' : 'false');
-  beforeBtn.textContent = stickyBefore ? 'Showing original' : 'Compare';
+  showBefore = peeking;
+  beforeBtn.setAttribute('aria-pressed', comparing ? 'true' : 'false');
+  placeSplit();
   render();
 }
 beforeBtn.addEventListener('click', function(){
-  stickyBefore = !stickyBefore;
+  comparing = !comparing;
+  splitAt = 0.5;
   updateBefore();
+});
+
+// Keeps the divider overlay on top of the photo as it's displayed.
+function placeSplit(){
+  var show = comparing && !!previewBitmap && !canvas.classList.contains('hidden');
+  splitEl.hidden = !show;
+  if(!show) return;
+  var r = canvas.getBoundingClientRect(), s = stage.getBoundingClientRect();
+  splitEl.style.left = (r.left - s.left) + 'px';
+  splitEl.style.top = (r.top - s.top) + 'px';
+  splitEl.style.width = r.width + 'px';
+  splitEl.style.height = r.height + 'px';
+  splitLine.style.left = (splitAt*100) + '%';
+  splitKnob.setAttribute('aria-valuenow', Math.round(splitAt*100));
+}
+window.addEventListener('resize', placeSplit);
+
+function moveSplit(clientX){
+  var r = canvas.getBoundingClientRect();
+  splitAt = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  render();
+}
+splitEl.addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  splitDrag = e.pointerId;
+  splitEl.setPointerCapture(e.pointerId);
+  moveSplit(e.clientX);
+});
+splitEl.addEventListener('pointermove', function(e){ if(e.pointerId === splitDrag) moveSplit(e.clientX); });
+['pointerup','pointercancel'].forEach(function(ev){
+  splitEl.addEventListener(ev, function(e){ if(e.pointerId === splitDrag) splitDrag = null; });
+});
+splitKnob.addEventListener('keydown', function(e){
+  if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  e.stopPropagation();   // arrows move the divider here, not to the next photo
+  splitAt = Math.min(1, Math.max(0, splitAt + (e.key === 'ArrowRight' ? 0.02 : -0.02)));
+  render();
 });
 window.addEventListener('keydown', function(e){
   if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
@@ -1309,12 +1398,16 @@ function render(){
   requestAnimationFrame(function(){
     renderQueued = false;
     if(!previewBitmap) return;
-    var it = items[current], cp = cropById(cropId), view = null;
+    var it = items[current], cp = cropById(cropId), view = {};
     if(it && cp.w){
-      view = { frame:frameFor(it.crop, previewBitmap.width, previewBitmap.height, cp), dim:0.62, grid:!!dragging };
+      view.frame = frameFor(it.crop, previewBitmap.width, previewBitmap.height, cp);
+      view.dim = 0.62;
+      view.grid = !!dragging;
     }
+    if(comparing && !showBefore) view.split = splitAt;
     try{
       draw(previewBitmap.width, previewBitmap.height, previewBitmap, showBefore ? 0 : 1, null, view);
+      placeSplit();
     }catch(err){
       say('Render failed: ' + err.message);
     }
@@ -1429,6 +1522,7 @@ function resetView(){
   fnameEl.textContent = ''; dimsEl.textContent = '';
   updateCropUI();
   paintSwatches();
+  placeSplit();
 }
 
 function updateExportState(){
@@ -1748,7 +1842,7 @@ var saveTimer = null;
 
 function snapshotState(){
   return {
-    session: { edit: Object.assign({}, edit), strength: strength, preset: activePreset, crop: cropId },
+    session: { edit: Object.assign({}, edit), strength: strength, preset: activePreset, crop: cropId, generated: generated },
     looks: customLooks
   };
 }
@@ -1831,6 +1925,7 @@ function applyRestored(data){
   if(interacted) return;
   var s = data.session;
   if(s && s.edit){
+    if(s.generated && s.generated.p) generated = s.generated;
     edit = Object.assign({}, DEFAULTS, s.edit);
     strength = (typeof s.strength === 'number') ? s.strength : 1;
     activePreset = s.preset || 'custom';
@@ -1854,6 +1949,479 @@ function initStore(){
   try{ raw = localStorage.getItem(LS_KEY); }catch(e){}
   if(raw){ try{ applyRestored(JSON.parse(raw)); }catch(e){} }
 }
+
+/* ============================== create a look ============================== */
+
+// Two ways to make a look, both entirely in this browser: match the tones and
+// colours of a photo you like, or describe the style in words.
+
+function clampTo(v, lo, hi){ return Math.min(hi, Math.max(lo, v)); }
+function round2(v){ return Math.round(v*100)/100; }
+function hexOf(rgb){
+  return '#' + rgb.map(function(v){ return ('0' + Math.round(clampTo(v, 0, 1)*255).toString(16)).slice(-2); }).join('');
+}
+
+var LIMITS = { shadowAmt:[0, 1], highlightAmt:[0, 1], balance:[-1, 1] };
+SLIDERS.forEach(function(s){ LIMITS[s.k] = [s.min, s.max]; });
+
+// Keeps a made-up look inside the sliders' ranges, and keeps saturation plus
+// vibrance from going below -1 (which would invert colours).
+function clampLook(p){
+  Object.keys(LIMITS).forEach(function(k){ p[k] = round2(clampTo(p[k] || 0, LIMITS[k][0], LIMITS[k][1])); });
+  if(p.saturation <= -1) p.vibrance = 0;
+  p.vibrance = Math.max(p.vibrance, round2(-1 - p.saturation));
+  return p;
+}
+
+// Tone, colour cast by brightness zone, saturation per hue band and corner
+// falloff, pooled over one or more bitmaps (sampled small). Casts are read
+// from near-neutral pixels where there are enough: that's where a grade's
+// tint shows, while colourful things (grass, timber) would skew the average.
+function photoStats(bitmaps){
+  var lumH = new Float64Array(256), satH = new Float64Array(101);
+  var zones = [[0,0,0,0], [0,0,0,0], [0,0,0,0]];   // shadows, mids, highlights: r-l, g-l, b-l, count
+  var neutral = [[0,0,0,0], [0,0,0,0], [0,0,0,0]];
+  var bands = { warm:[], green:[], blue:[] }, greenHue = [];
+  var edge = 0, edgeN = 0, centre = 0, centreN = 0, total = 0;
+  bitmaps.forEach(function(bm){
+    var d = fitInto(bm.width, bm.height, 200);
+    var c = document.createElement('canvas'); c.width = d[0]; c.height = d[1];
+    var ctx = c.getContext('2d', { willReadFrequently:true });
+    ctx.drawImage(bm, 0, 0, d[0], d[1]);
+    var px = ctx.getImageData(0, 0, d[0], d[1]).data;
+    for(var i = 0, n = 0; i < px.length; i += 4, n++){
+      var r = px[i]/255, g = px[i+1]/255, b = px[i+2]/255;
+      var l = 0.2126*r + 0.7152*g + 0.0722*b;
+      var mx = Math.max(r, g, b), mn = Math.min(r, g, b), s = mx > 0 ? (mx - mn)/mx : 0;
+      lumH[Math.round(l*255)]++;
+      satH[Math.round(s*100)]++;
+      var zi = l < 0.25 ? 0 : l < 0.7 ? 1 : 2, z = zones[zi];
+      z[0] += r - l; z[1] += g - l; z[2] += b - l; z[3]++;
+      if(s < 0.3){ z = neutral[zi]; z[0] += r - l; z[1] += g - l; z[2] += b - l; z[3]++; }
+      if(s > 0.12){
+        var dd = mx - mn;
+        var h = 60*(mx === r ? ((g - b)/dd + 6) % 6 : mx === g ? (b - r)/dd + 2 : (r - g)/dd + 4);
+        if(h >= 10 && h < 45) bands.warm.push(s);
+        else if(h >= 45 && h < 170){ bands.green.push(s); greenHue.push(h); }
+        else if(h >= 180 && h < 260) bands.blue.push(s);
+      }
+      var dx = (n % d[0])/d[0] - 0.5, dy = Math.floor(n / d[0])/d[1] - 0.5, rr = Math.sqrt(dx*dx + dy*dy);
+      if(rr > 0.55){ edge += l; edgeN++; } else if(rr < 0.25){ centre += l; centreN++; }
+    }
+    total += d[0]*d[1];
+  });
+  function pct(h, q){
+    var sum = 0, acc = 0, k;
+    for(k = 0; k < h.length; k++) sum += h[k];
+    for(k = 0; k < h.length; k++){ acc += h[k]; if(acc >= q*sum) return k/(h.length - 1); }
+    return 1;
+  }
+  function med(a){ if(!a.length) return 0; a.sort(function(x, y){ return x - y; }); return a[a.length >> 1]; }
+  function band(a, extra){ return Object.assign({ frac:a.length/total, sat:med(a) }, extra || {}); }
+  return {
+    pct:[0.02, 0.05, 0.25, 0.5, 0.75, 0.95, 0.98].map(function(q){ return pct(lumH, q); }),
+    sat:pct(satH, 0.5),
+    cast:zones.map(function(z, i){
+      var src = neutral[i][3] > Math.max(30, z[3]*0.05) ? neutral[i] : z;
+      return src[3] ? [src[0]/src[3], src[1]/src[3], src[2]/src[3]] : [0, 0, 0];
+    }),
+    share:zones.map(function(z){ return z[3]/total; }),
+    bands:{ warm:band(bands.warm), green:band(bands.green, { hue:med(greenHue) }), blue:band(bands.blue) },
+    corner:edgeN && centreN ? (edge/edgeN) / Math.max(centre/centreN, 0.02) : 1
+  };
+}
+
+// A typical photo, to match against before any of yours are loaded.
+var TYPICAL = {
+  pct:[0.03, 0.06, 0.28, 0.5, 0.7, 0.92, 0.96], sat:0.25, cast:[[0,0,0], [0,0,0], [0,0,0]], share:[0.25, 0.5, 0.25],
+  bands:{ warm:{ frac:0.2, sat:0.3 }, green:{ frac:0.1, sat:0.35, hue:90 }, blue:{ frac:0.05, sat:0.3 } }, corner:0.9
+};
+
+// The shader's tone stages on a grey value, so slider values can be fitted.
+function toneOf(v, t){
+  var lin = (v <= 0.04045 ? v/12.92 : Math.pow((v + 0.055)/1.055, 2.4))*Math.pow(2, t.exposure);
+  var c = clampTo(lin <= 0.0031308 ? lin*12.92 : 1.055*Math.pow(lin, 1/2.4) - 0.055, 0, 1);
+  var hi = clampTo((c - 0.45)/0.55, 0, 1), lo = clampTo(c/0.55, 0, 1);
+  c = clampTo(c + t.shadows*(1 - lo*lo*(3 - 2*lo))*0.5 + t.highlights*hi*hi*(3 - 2*hi)*0.5, 0, 1);
+  c = clampTo(c + t.whites*c*c*c*0.45 + t.blacks*Math.pow(1 - c, 3)*0.45, 0, 1);
+  c = clampTo((c - 0.5)*(1 + t.contrast) + 0.5, 0, 1);
+  return c*(1 - t.fade*0.26) + t.fade*0.13;
+}
+
+// Piecewise-linear value at x through points sorted by x.
+function interp(pts, x){
+  for(var i = 1; i < pts.length; i++){
+    if(x <= pts[i][0]){
+      var a = pts[i-1], b = pts[i], t = b[0] > a[0] ? (x - a[0])/(b[0] - a[0]) : 0;
+      return a[1] + (b[1] - a[1])*t;
+    }
+  }
+  return pts[pts.length - 1][1];
+}
+
+var TONE = [['exposure', -1.5, 1], ['highlights', -1, 1], ['shadows', -1, 1], ['whites', -1, 1],
+            ['blacks', -1, 1], ['contrast', -0.6, 0.8], ['fade', 0, 0.8]];
+
+// Tone slider values whose curve best passes through [in, out] points,
+// preferring gentle settings. Seeded, so the same photos give the same look.
+function fitTone(pts){
+  var xs = [], ys = [], i;
+  for(i = 0; i <= 32; i++){ xs.push(i/32); ys.push(interp(pts, i/32)); }
+  function err(v){
+    var t = {}, e = 0, j;
+    TONE.forEach(function(k, j){ t[k[0]] = v[j]; });
+    for(j = 0; j < xs.length; j++){ var dv = toneOf(xs[j], t) - ys[j]; e += dv*dv; }
+    e /= xs.length;
+    for(j = 0; j < 6; j++) e += 0.0002*v[j]*v[j];
+    return e;
+  }
+  var seed = 12345;
+  function rnd(){ seed = (seed*16807) % 2147483647; return seed/2147483647; }
+  function gauss(){ return Math.sqrt(-2*Math.log(rnd() + 1e-12))*Math.cos(2*Math.PI*rnd()); }
+  var best = [0, 0, 0, 0, 0, 0, 0], bestErr = err(best), step = 0.35;
+  for(i = 0; i < 6000; i++){
+    var cand = best.map(function(v, j){ return clampTo(v + gauss()*step, TONE[j][1], TONE[j][2]); });
+    var e = err(cand);
+    if(e < bestErr){ best = cand; bestErr = e; }
+    if(i % 1500 === 1499) step /= 2;
+  }
+  var out = {};
+  TONE.forEach(function(k, j){ out[k[0]] = round2(best[j]); });
+  return out;
+}
+
+// Tone sliders that carry brightness percentiles `from` onto `to`.
+function toneBetween(from, to){
+  var pts = [[0, Math.max(0, to[0] - from[0])]];
+  for(var i = 0; i < to.length; i++){
+    var last = pts[pts.length - 1];
+    if(from[i] > last[0] + 0.01) pts.push([from[i], clampTo(Math.max(to[i], last[1]), 0, 1)]);
+  }
+  var end = pts[pts.length - 1];
+  pts.push([1, Math.max(end[1], Math.min(1, to[to.length - 1] + 1 - from[from.length - 1]))]);
+  return fitTone(pts);
+}
+
+function warmth(c){ return c[0] - c[2]; }
+function greenness(c){ return c[1] - (c[0] + c[2])/2; }
+function midHighCast(S){ return [0, 1, 2].map(function(k){ return (S.cast[1][k] + S.cast[2][k])/2; }); }
+
+// Slider values that move photos with stats B towards the look of reference R.
+function matchStyle(R, B){
+  var p = {};
+  Object.assign(p, toneBetween(B.pct, R.pct));
+
+  // white balance: move the cast of the mids and highlights to the reference's
+  var cr = midHighCast(R), cb = midHighCast(B);
+  p.temp = round2(clampTo((warmth(cr) - warmth(cb))/0.25, -0.6, 0.6));
+  p.tint = round2(clampTo(-(greenness(cr) - greenness(cb))/0.1, -0.5, 0.5));
+
+  if(R.sat < 0.04){
+    // black and white: keep any toning (sepia, cool) as split tone
+    p.saturation = -1; p.temp = 0; p.tint = 0;
+    [[0, 'shadowTint', 'shadowAmt'], [2, 'highlightTint', 'highlightAmt']].forEach(function(z){
+      var c = R.cast[z[0]];
+      if(Math.abs(c[0]) + Math.abs(c[1]) + Math.abs(c[2]) > 0.015){
+        p[z[1]] = hexOf(c.map(function(v){ return 0.5 + v/0.42; }));
+        p[z[2]] = 0.6;
+      }
+    });
+  }else{
+    p.saturation = round2(clampTo((R.sat/Math.max(B.sat, 0.02) - 1)*0.9, -0.8, 0.5));
+    [['warm', 'warmSat'], ['green', 'greenSat'], ['blue', 'blueSat']].forEach(function(k){
+      var r = R.bands[k[0]], q = B.bands[k[0]];
+      if(r.frac > 0.02 && q.frac > 0.02 && q.sat > 0){
+        p[k[1]] = round2(clampTo(r.sat/(q.sat*(1 + p.saturation)) - 1, -0.8, 0.8));
+      }
+    });
+    if(R.bands.green.frac > 0.02 && B.bands.green.frac > 0.02){
+      p.greenHue = round2(clampTo((R.bands.green.hue - B.bands.green.hue)/21.6, -1, 1));
+    }
+    // split tone: how the reference's shadows and highlights lean away from its
+    // mids, kept subtle so a misread can't paint the shadows a strong colour
+    [[0, 'shadowTint', 'shadowAmt'], [2, 'highlightTint', 'highlightAmt']].forEach(function(z){
+      var d = [0, 1, 2].map(function(k){
+        return clampTo((R.cast[z[0]][k] - R.cast[1][k]) - (B.cast[z[0]][k] - B.cast[1][k]), -0.06, 0.06);
+      });
+      if(Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]) > 0.02 && R.share[z[0]] > 0.03){
+        p[z[1]] = hexOf(d.map(function(v){ return 0.5 + v/0.42; }));
+        p[z[2]] = 0.6;
+      }
+    });
+  }
+  p.vignette = round2(clampTo((B.corner - R.corner)*1.5, 0, 0.35));
+  return p;
+}
+
+// A reference rarely shows the same kind of scene as your photos, so aim most
+// of the way to it instead of copying it outright: a bright sky shot shouldn't
+// blow out a set of interiors. Tone moves 75% of the way, colour 85%.
+function towards(R, B){
+  function lerp(a, b, t){ return a + (b - a)*t; }
+  function ratio(r, b, t){ return b > 0 && r > 0 ? b*Math.pow(r/b, t) : r; }
+  function band(k){
+    return { frac:R.bands[k].frac, sat:ratio(R.bands[k].sat, B.bands[k].sat, 0.85),
+             hue:lerp(B.bands[k].hue || 0, R.bands[k].hue || 0, 0.85) };
+  }
+  return {
+    pct:B.pct.map(function(v, i){ return lerp(v, R.pct[i], 0.75); }),
+    sat:ratio(R.sat, B.sat, 0.85),
+    cast:B.cast.map(function(c, i){ return c.map(function(v, k){ return lerp(v, R.cast[i][k], 0.85); }); }),
+    share:R.share,
+    bands:{ warm:band('warm'), green:band('green'), blue:band('blue') },
+    corner:lerp(B.corner, R.corner, 0.85)
+  };
+}
+
+// Renders the sample photos small with a look and measures the result.
+function measureWith(p, bitmaps){
+  var shots = bitmaps.map(function(bm){
+    draw(bm.width, bm.height, bm, 1, Object.assign({}, DEFAULTS, p));
+    var c = document.createElement('canvas');
+    c.width = bm.width; c.height = bm.height;
+    c.getContext('2d').drawImage(canvas, 0, 0);
+    return c;
+  });
+  var s = photoStats(shots);
+  render();   // put the preview back
+  return s;
+}
+
+// The first match is worked out on neutral greys, but the colour stages also
+// move brightness and saturation. Render, compare with the reference, and
+// correct: two passes get close.
+function refineMatch(p, R, B, sample){
+  var aim = R.pct.slice(), mono = p.saturation <= -1;
+  for(var pass = 0; pass < 2; pass++){
+    var S = measureWith(p, sample);
+    aim = aim.map(function(v, i){ return clampTo(v + R.pct[i] - S.pct[i], 0, 1); });
+    Object.assign(p, toneBetween(B.pct, aim));
+    if(mono) continue;
+    // move most of the way to each correction, so small colour bands can't overshoot
+    var ease = function(from, to){ return from + 0.75*(to - from); };
+    p.saturation = round2(clampTo(ease(p.saturation, (1 + p.saturation)*R.sat/Math.max(S.sat, 0.01) - 1), -0.9, 0.6));
+    [['warm', 'warmSat'], ['green', 'greenSat'], ['blue', 'blueSat']].forEach(function(k){
+      var r = R.bands[k[0]], s = S.bands[k[0]], now = p[k[1]] || 0;
+      if(r.frac > 0.02 && s.frac > 0.02 && s.sat > 0){
+        p[k[1]] = round2(clampTo(ease(now, (1 + now)*r.sat/s.sat - 1), -0.7, 0.7));
+      }
+    });
+    var cr = midHighCast(R), cs = midHighCast(S);
+    p.temp = round2(clampTo(p.temp + 0.75*(warmth(cr) - warmth(cs))/0.25, -0.8, 0.8));
+    p.tint = round2(clampTo(p.tint - 0.75*(greenness(cr) - greenness(cs))/0.1, -0.6, 0.6));
+  }
+  return p;
+}
+
+// A spread of the loaded photos, decoded small, to stand in for the whole set.
+function sampleBitmaps(max){
+  var picks = [], n = Math.min(max, items.length);
+  for(var i = 0; i < n; i++) picks.push(items[Math.floor(i*items.length/n)]);
+  return Promise.all(picks.map(function(it){ return decode(it.file, 256).catch(function(){ return null; }); }))
+    .then(function(bms){ return bms.filter(Boolean); });
+}
+
+// Style words for "describe it". Each adds to the sliders (tints are set);
+// longer phrases win, and words like "very" or "slightly" scale them.
+var STYLE_WORDS = [
+  [['black and white','bw','b w','monochrome','mono','greyscale','grayscale'], { saturation:-1, contrast:0.1 }],
+  [['sepia'], { saturation:-0.9, shadowTint:'#6b4f35', shadowAmt:0.5, highlightTint:'#e8cfa6', highlightAmt:0.4 }],
+  [['teal and orange','orange and teal','blockbuster'], { shadowTint:'#2a6a6a', shadowAmt:0.45, highlightTint:'#e09a5c', highlightAmt:0.3, contrast:0.15, warmSat:0.15 }],
+  [['golden hour','sunset','sundown'], { temp:0.3, warmSat:0.2, highlights:0.1, highlightTint:'#f2b46c', highlightAmt:0.25, shadowTint:'#5a4a6a', shadowAmt:0.15 }],
+  [['blue hour','night','evening','dusk','twilight'], { exposure:-0.5, highlights:0.3, whites:0.25, vignette:0.15, shadowTint:'#3d5566', shadowAmt:0.35, highlightTint:'#f2c98e', highlightAmt:0.25 }],
+  [['morning','dawn','sunrise'], { exposure:0.15, temp:-0.05, fade:0.15, contrast:-0.1, highlightTint:'#f5e1c8', highlightAmt:0.15 }],
+  [['pale sky','pale skies','soft sky','soft skies'], { blueSat:-0.6, blueLum:0.4 }],
+  [['blue sky','blue skies','deep sky','dramatic sky','dramatic skies'], { blueSat:0.3, blueLum:-0.3 }],
+  [['rich timber','rich wood','warm wood','warm timber'], { warmSat:0.25, warmLum:-0.15 }],
+  [['creamy','creamy whites','cream'], { temp:-0.05, highlightTint:'#f2e6cc', highlightAmt:0.2 }],
+  [['deep blacks','rich blacks','crushed blacks','inky'], { blacks:-0.3, fade:-0.2 }],
+  [['lifted blacks','soft blacks','faded blacks','milky'], { fade:0.3 }],
+  [['high contrast','contrasty','punchy','crisp'], { contrast:0.3, blacks:-0.1, whites:0.1 }],
+  [['low contrast','flat'], { contrast:-0.25, fade:0.15 }],
+  [['moody','moodier','brooding'], { exposure:-0.5, contrast:0.15, highlights:0.3, whites:0.2, blacks:-0.1, saturation:-0.15, greenSat:-0.25, blueSat:-0.3, fade:0.2, vignette:0.12, temp:-0.05 }],
+  [['stormy'], { exposure:-0.3, contrast:0.2, temp:-0.15, saturation:-0.2, blueLum:-0.3, highlights:0.1, vignette:0.15 }],
+  [['dramatic','bold'], { contrast:0.3, blacks:-0.15, whites:0.15, vibrance:0.15, vignette:0.15 }],
+  [['dark','darker','low key','dim','shadowy'], { exposure:-0.45, highlights:0.25, whites:0.2, blacks:-0.1 }],
+  [['bright','brighter','lighter','high key','luminous'], { exposure:0.25, shadows:0.15, highlights:-0.1, whites:0.1 }],
+  [['airy'], { exposure:0.25, shadows:0.2, contrast:-0.1, saturation:-0.1, fade:0.1 }],
+  [['soft','gentle'], { contrast:-0.2, fade:0.2, highlights:-0.1, shadows:0.1 }],
+  [['dreamy','ethereal','hazy'], { contrast:-0.25, fade:0.3, exposure:0.1, saturation:-0.1, highlightTint:'#f5e1d2', highlightAmt:0.2 }],
+  [['faded','matte','washed out','washed'], { fade:0.4, contrast:-0.1, saturation:-0.15 }],
+  [['warm','warmer','golden','amber','honey','sunlit'], { temp:0.25, highlightTint:'#f0c890', highlightAmt:0.15 }],
+  [['cool','cooler','cold','icy','chilly','frosty','blue'], { temp:-0.3, saturation:-0.1, highlightTint:'#dfe7ef', highlightAmt:0.1 }],
+  [['winter','wintry','wintery'], { temp:-0.25, saturation:-0.25, exposure:0.1, fade:0.15, greenSat:-0.3 }],
+  [['autumn','autumnal','fall'], { temp:0.2, warmSat:0.3, greenHue:-0.5, greenSat:-0.2, tint:0.03 }],
+  [['spring'], { greenSat:0.2, exposure:0.1, saturation:0.05, temp:0.05 }],
+  [['summer','summery','sunny'], { temp:0.15, vibrance:0.2, exposure:0.1 }],
+  [['tropical'], { vibrance:0.3, greenSat:0.2, blueSat:0.25, temp:0.1 }],
+  [['beach','coastal','seaside','ocean'], { exposure:0.2, blueSat:0.2, blueLum:0.15, temp:0.08, vibrance:0.15, fade:0.1 }],
+  [['nordic','scandi','scandinavian'], { temp:-0.15, saturation:-0.25, exposure:0.15, fade:0.2, contrast:-0.05, greenSat:-0.3 }],
+  [['vibrant','saturated','colourful','colorful','vivid','poppy','pop'], { vibrance:0.35, saturation:0.15 }],
+  [['muted','desaturated','subdued','understated','quiet'], { saturation:-0.3, vibrance:-0.1 }],
+  [['earthy','organic'], { saturation:-0.15, warmSat:0.15, greenHue:0.2, greenSat:-0.25, blueSat:-0.3, temp:0.05 }],
+  [['rustic','farmhouse','country'], { temp:0.05, warmSat:0.2, greenHue:0.25, greenSat:-0.25, fade:0.15 }],
+  [['natural','true to life','realistic','clean'], { contrast:0.05, vibrance:0.05 }],
+  [['pastel'], { saturation:-0.25, exposure:0.2, fade:0.3, contrast:-0.15, highlights:-0.1 }],
+  [['film look','cinematic','movie'], { contrast:0.15, fade:0.1, exposure:-0.1, vignette:0.15, shadowTint:'#2f5a63', shadowAmt:0.3, highlightTint:'#e8b07a', highlightAmt:0.2 }],
+  [['film','analog','analogue','35mm','kodak'], { fade:0.2, grain:0.12, contrast:-0.05, saturation:-0.05, temp:0.05, shadowTint:'#3d4a52', shadowAmt:0.15, highlightTint:'#efd9b8', highlightAmt:0.15 }],
+  [['portra'], { fade:0.2, grain:0.1, temp:0.1, warmSat:0.1, greenHue:0.2, contrast:-0.1, highlightTint:'#f2dcc0', highlightAmt:0.2 }],
+  [['fuji','fujifilm'], { greenHue:0.3, greenSat:0.1, blueSat:0.1, shadowTint:'#3a5a50', shadowAmt:0.2, contrast:0.05, grain:0.08 }],
+  [['vintage','retro','nostalgic','old school','70s','seventies'], { fade:0.3, temp:0.15, saturation:-0.2, grain:0.1, highlightTint:'#f0d8a8', highlightAmt:0.25, vignette:0.15, greenHue:-0.3 }],
+  [['editorial','magazine'], { contrast:0.1, fade:0.25, saturation:-0.15, greenSat:-0.2, blueSat:-0.3, highlights:0.15, temp:-0.05 }],
+  [['luxury','luxurious','elegant','premium'], { contrast:0.1, saturation:-0.1, fade:0.1, warmSat:0.1, vignette:0.08 }],
+  [['modern','minimal','minimalist'], { exposure:0.1, contrast:0.1, saturation:-0.05, whites:0.15, temp:-0.05 }],
+  [['cosy','cozy','hygge','candlelit','candlelight','lamplit','intimate'], { exposure:-0.4, temp:0.15, warmSat:0.15, vignette:0.2, highlights:0.25, fade:0.15 }],
+  [['rainy','overcast','cloudy','grey','gray','gloomy'], { temp:-0.15, saturation:-0.25, contrast:-0.15, fade:0.25, highlights:-0.1, blueSat:-0.4 }],
+  [['foggy','misty'], { exposure:0.1, fade:0.35, contrast:-0.25, saturation:-0.2 }],
+  [['lush','green'], { greenSat:0.3, greenLum:-0.1 }],
+  [['olive'], { greenHue:-0.3, greenSat:-0.3, greenLum:-0.15 }],
+  [['hdr'], { shadows:0.4, highlights:-0.4, contrast:0.1, vibrance:0.2 }],
+  [['grainy','grain','gritty','noisy'], { grain:0.25 }],
+  [['vignette','vignetted','vignetting'], { vignette:0.3 }],
+  // nouns, so "more contrast", "less saturation" or "no warmth" work
+  [['contrast'], { contrast:0.25 }],
+  [['saturation','colour','color','colours','colors'], { saturation:0.2 }],
+  [['warmth'], { temp:0.2 }],
+  [['brightness','exposure'], { exposure:0.2 }]
+];
+
+var STRONGER = ['very','really','super','ultra','heavily','heavy','strong','strongly','deeply','extremely','lots','lot'];
+var WEAKER = ['slightly','slight','bit','little','subtle','subtly','gently','softly','touch','hint','light','lightly','mild','mildly','somewhat','faint','faintly'];
+
+// How the words just before a style word change it: "very" boosts, "slightly"
+// softens, "less" and "not" reverse it, "not too" eases it back, "no" and
+// "without" switch it off.
+function modifier(words, i){
+  var a = words[i - 1] || '', b = words[i - 2] || '';
+  var word = (a === 'of' && b) ? b + ' of' : (b === 'a' && (a === 'bit' || a === 'little')) ? 'a ' + a : a;
+  var key = a === 'of' ? b : a;
+  if(a === 'no' || a === 'without' || a === 'zero') return { scale:0, word:word };
+  if(b === 'not' && (a === 'too' || a === 'overly' || a === 'very')) return { scale:-0.35, word:'not ' + a };
+  if(['not','less','fewer','reduce','reduced','lower','minus'].indexOf(a) >= 0) return { scale:-0.6, word:word };
+  if(a === 'more' || a === 'extra') return { scale:1.4, word:word };
+  if(STRONGER.indexOf(key) >= 0) return { scale:1.6, word:word };
+  if(WEAKER.indexOf(key) >= 0) return { scale:0.5, word:word };
+  return { scale:1, word:'' };
+}
+
+// Where several words push the same slider, the total eases off towards these
+// limits instead of piling up ("moody faded film" shouldn't wash out).
+var SOFT = { exposure:1, contrast:0.5, highlights:0.7, shadows:0.7, whites:0.6, blacks:0.6, temp:0.6, tint:0.4,
+  vibrance:0.6, saturation:0.8, warmSat:0.6, warmLum:0.5, greenHue:0.8, greenSat:0.7, greenLum:0.5,
+  blueSat:0.8, blueLum:0.6, fade:0.6, vignette:0.45, grain:0.4, shadowAmt:0.6, highlightAmt:0.6 };
+
+function addStyle(acc, delta, scale){
+  Object.keys(delta).forEach(function(k){
+    var v = delta[k];
+    if(typeof v === 'string'){ if(scale > 0) acc.tints[k] = v; }                // tint colours are set
+    else if(scale === 0) acc.off[k] = true;                                      // "no grain"
+    else if(k === 'saturation' && v === -1){ if(scale > 0) acc.mono = true; }    // black and white is all or nothing
+    else acc.sum[k] = (acc.sum[k] || 0) + v*scale;
+  });
+}
+
+// Turns a description into a look. A built-in look named in the text is the
+// starting point ("like Noir but a bit warmer").
+function describeLook(text){
+  var words = text.toLowerCase()
+    .replace(/\bb\s*[&\/]\s*w\b/g, 'bw')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim().split(' ');
+  var base = PRESETS.filter(function(pr){ return pr.group && words.indexOf(pr.id) >= 0; })[0];
+  var p = Object.assign({}, DEFAULTS, base ? base.p : {});
+  var acc = { sum:{}, tints:{}, off:{}, mono:false }, used = [], names = [], seen = [];
+  if(base){ used.push(base.name); names.push(base.id); }
+  for(var i = 0; i < words.length;){
+    var hit = null;
+    for(var n = Math.min(4, words.length - i); n >= 1 && !hit; n--){
+      var phrase = words.slice(i, i + n).join(' ');
+      if(base && phrase === base.id) continue;
+      for(var k = 0; k < STYLE_WORDS.length && !hit; k++){
+        if(STYLE_WORDS[k][0].indexOf(phrase) >= 0) hit = { delta:STYLE_WORDS[k][1], n:n, phrase:phrase, entry:k };
+      }
+    }
+    if(!hit){ i++; continue; }
+    if(seen.indexOf(hit.entry) >= 0){ i += hit.n; continue; }   // synonyms count once ("cosy candlelit")
+    seen.push(hit.entry);
+    var m = modifier(words, i);
+    addStyle(acc, hit.delta, m.scale);
+    used.push((m.word ? m.word + ' ' : '') + hit.phrase);
+    if(m.scale > 0 && names.indexOf(hit.phrase) < 0) names.push(hit.phrase);
+    i += hit.n;
+  }
+  Object.keys(acc.sum).forEach(function(k){ var L = SOFT[k] || 1; p[k] = (p[k] || 0) + L*Math.tanh(acc.sum[k]/L); });
+  Object.keys(acc.tints).forEach(function(k){ p[k] = acc.tints[k]; });
+  Object.keys(acc.off).forEach(function(k){ p[k] = 0; });
+  if(acc.mono) p.saturation = -1;
+  // black and white can't look warmer or cooler, so tone it instead
+  if(p.saturation <= -1 && acc.sum.temp){
+    var warm = acc.sum.temp > 0, amt = Math.min(0.6, Math.abs(acc.sum.temp)*2);
+    p.shadowTint = warm ? '#5c4a38' : '#3a4a5c';
+    p.highlightTint = warm ? '#ecd6b4' : '#d6e0ec';
+    p.shadowAmt = Math.max(p.shadowAmt || 0, amt);
+    p.highlightAmt = Math.max(p.highlightAmt || 0, amt*0.8);
+  }
+  var name = names.slice(0, 3).join(' ');
+  name = name ? name.charAt(0).toUpperCase() + name.slice(1) : 'My look';
+  return { p:clampLook(p), used:used, name:name.slice(0, 28) };
+}
+
+function createNote(text){
+  var el = $('createNote');
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+// Applies a made look like any other: Strength scales it, Save keeps it.
+function applyGenerated(name, p, msg){
+  generated = { id:'generated', name:name, p:clampLook(Object.assign({}, DEFAULTS, p)) };
+  interacted = true;
+  activePreset = 'generated';
+  strength = 1; strengthInput.value = 1; $('v_strength').textContent = '100%';
+  paintRange(strengthInput);
+  edit = Object.assign({}, generated.p);
+  clearPressed();
+  syncSliders();
+  render();
+  persist();
+  $('lookName').value = name;
+  createNote(msg + ' Fine-tune it with Strength or Adjust, then save it under My looks.');
+}
+
+$('describeForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  var text = $('lookPrompt').value.trim();
+  if(!text){ $('lookPrompt').focus(); return; }
+  var res = describeLook(text);
+  if(!res.used.length){
+    createNote('I didn’t recognise any style words there. Try words like warm, moody, faded, film, cinematic, pastel, pale skies or black and white.');
+    return;
+  }
+  applyGenerated(res.name, res.p, 'Made “' + res.name + '” from: ' + res.used.join(' · ') + '.');
+});
+
+$('matchPhoto').addEventListener('click', function(){ $('refInput').click(); });
+$('refInput').addEventListener('change', function(e){
+  var file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  createNote('Reading the style of ' + file.name + '…');
+  Promise.all([decode(file, 320), sampleBitmaps(8)]).then(function(r){
+    var sample = r[1], B = sample.length ? photoStats(sample) : TYPICAL;
+    var R = towards(photoStats([r[0]]), B);
+    var look = matchStyle(R, B);
+    if(sample.length) refineMatch(look, R, B, sample);
+    r[0].close();
+    sample.forEach(function(bm){ bm.close(); });
+    var name = ('Match ' + file.name.replace(/\.[^.]+$/, '')).slice(0, 28);
+    var target = !items.length ? 'a typical photo' : items.length === 1 ? 'your photo' : 'your ' + items.length + ' photos';
+    applyGenerated(name, look, 'Made “' + name + '” from the tones and colours of ' + file.name + ', matched to ' + target + '.');
+  }).catch(function(){
+    createNote('');
+    say('Couldn’t read that photo. Try a JPEG, PNG or WebP.');
+  });
+});
 
 /* ============================== boot ============================== */
 

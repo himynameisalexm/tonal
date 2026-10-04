@@ -35,6 +35,12 @@ Working:
   against a country-editorial moodboard (creamy whites, muted natural greens, pale
   skies, rich timber, soft blacks that still print with detail). Classic: Ember,
   Rust, Paper and Noir
+- Create a look: describe a style in words ("warm moody film", "pale skies and rich
+  timber", "like Noir but a bit warmer"), or match a photo you like. Matching
+  measures the reference's tones, colour casts and saturation, fits the sliders to
+  your photos, then renders and corrects twice. Both run entirely in the browser
+- Compare: a before/after divider you drag across the photo (or use the arrow keys);
+  hold \ to see the whole original
 - Named custom looks saved to `localStorage`
 - Crop presets exported at each platform's exact size: Instagram portrait 3:4
   (1080×1440) and 4:5 (1080×1350), square, landscape 1.91:1 and Story/Reel 9:16;
@@ -57,6 +63,8 @@ Known gaps:
   per photo)
 - No clarity or sharpening (needs a multi-pass blur)
 - No tone curve
+- Describing a look understands a built-in vocabulary of style words (about 60
+  terms plus modifiers like "very", "slightly", "less", "no"), not any sentence
 - JSZip is loaded from cdnjs (pinned with an SRI hash); vendor it locally if you want
   the page to work offline
 
