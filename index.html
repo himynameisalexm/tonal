@@ -296,6 +296,72 @@ select:focus-visible{outline:none;border-color:var(--ink)}
 }
 .toast.error{background:var(--danger);color:#fff}
 
+/* ---- photos / video mode ---- */
+.modes{display:flex;gap:2px;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow)}
+.modes button{border:0;background:transparent;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:600;color:var(--ink-3)}
+.modes button:hover{color:var(--ink)}
+.modes button[aria-selected="true"]{background:var(--ink);color:var(--on-ink)}
+body:not(.video-mode) .video-only, body.video-mode .photo-only{display:none !important}
+
+/* video player, timeline and panel */
+.vbar{display:flex;align-items:center;gap:12px;min-height:34px}
+.vbar input[type=range]{flex:1}
+.vplay{min-width:76px}
+.vtime{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.vfocus{
+  position:absolute;z-index:2;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;pointer-events:none;
+  border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35),inset 0 0 0 1px rgba(0,0,0,.35);
+}
+.vfocus::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#fff}
+.stage.picking #vCanvas{cursor:crosshair}
+.vclips{position:relative;display:flex;gap:10px;overflow-x:auto;padding:8px 6px;scrollbar-width:thin}
+.vclip{position:relative;flex:none;width:104px}
+.vclip.dragging{opacity:.35}
+.vclip.over::before{content:"";position:absolute;left:-6px;top:0;bottom:0;width:2px;border-radius:2px;background:var(--ink)}
+.vthumb{position:relative;display:block;width:104px;height:66px;padding:0;border:0;border-radius:12px;overflow:hidden;background:var(--surface-2)}
+.vthumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.vthumb[aria-pressed="true"]{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}
+.vbadge{
+  position:absolute;bottom:5px;padding:2px 6px;border-radius:999px;pointer-events:none;
+  background:rgba(20,20,20,.68);color:#fff;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;
+}
+.vbadge.dur{left:5px}
+.vbadge.mo{right:5px}
+.vclip:hover .x,.vthumb[aria-pressed="true"] + .x{display:flex}
+.vhead{position:absolute;top:4px;bottom:4px;width:2px;margin-left:-1px;border-radius:2px;background:var(--ink);pointer-events:none}
+.vsec{margin-bottom:22px}
+.vsec .section-title{display:flex;justify-content:space-between;gap:8px}
+.vsec .section-title b{font-weight:700;color:var(--ink);letter-spacing:0}
+.seg{display:flex;gap:2px;padding:3px;background:var(--surface-2);border-radius:999px}
+.seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:7px 8px;font-size:12.5px;font-weight:600;color:var(--ink-3);white-space:nowrap}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line-strong)}
+.seg + .seg,.seg + .vlabel,.vchips + .vlabel{margin-top:10px}
+.vlabel{display:block;font-size:12px;color:var(--ink-2);margin:0 0 6px}
+.vfits{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--ink-2)}
+.vchips{display:flex;flex-wrap:wrap;gap:6px}
+.vchips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.vchips button:hover{border-color:var(--line-strong);color:var(--ink)}
+.vchips button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.vinput{
+  display:block;width:100%;margin-bottom:8px;border:1px solid var(--line-strong);background:var(--surface);
+  border-radius:999px;padding:9px 15px;font-size:13px;
+}
+.vinput:focus{outline:none;border-color:var(--ink)}
+.vtoggle{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.vtoggle input{accent-color:var(--ink);width:16px;height:16px;margin:0}
+.vbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.vbtns .btn{padding:7px 12px;font-size:12px}
+.vpick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.vpick button{position:relative;padding:0;border:0;border-radius:10px;overflow:hidden;aspect-ratio:1;background:var(--surface-2)}
+.vpick img{width:100%;height:100%;object-fit:cover;display:block;opacity:.4;transition:opacity .12s}
+.vpick button[aria-pressed="true"] img{opacity:1}
+.vpick .n{
+  position:absolute;top:4px;right:4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;
+  display:flex;align-items:center;justify-content:center;background:var(--ink);color:var(--on-ink);font-size:11px;font-weight:700;
+}
+.vinfo{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+
 /* ---- layout ---- */
 @media (min-width:1024px){
   .app{height:100vh;height:100dvh;min-height:600px}
@@ -324,6 +390,10 @@ select:focus-visible{outline:none;border-color:var(--ink)}
     <h1 class="wordmark">Tonal</h1>
     <span class="tag">Batch photo grading, right in your browser</span>
   </div>
+  <div class="modes" role="tablist" aria-label="Mode">
+    <button role="tab" id="modePhotos" aria-selected="true">Photos</button>
+    <button role="tab" id="modeVideo" aria-selected="false">Video</button>
+  </div>
   <div class="pillgroup" role="group" aria-label="Add photos">
     <button id="addFiles">Add photos</button>
     <button id="addFolder">Add folder</button>
@@ -344,8 +414,10 @@ select:focus-visible{outline:none;border-color:var(--ink)}
         </div>
         <p class="fine">Folders work in desktop Chrome, Edge, Firefox and Safari. On a phone or tablet, choose photos.</p>
       </div>
-      <canvas id="gl" class="hidden"></canvas>
-      <div class="split" id="split" hidden>
+      <canvas id="gl" class="hidden photo-only"></canvas>
+      <canvas id="vCanvas" class="hidden video-only"></canvas>
+      <div class="vfocus video-only" id="vFocus" hidden></div>
+      <div class="split photo-only" id="split" hidden>
         <span class="split-tag">Original</span>
         <span class="split-tag edited">Edited</span>
         <div class="split-line" id="splitLine">
@@ -356,13 +428,22 @@ select:focus-visible{outline:none;border-color:var(--ink)}
         </div>
       </div>
     </div>
-    <div class="stage-bar" id="stageBar" hidden>
+    <div class="vbar video-only" id="vBar" hidden>
+      <button class="pill vplay" id="vPlay">Play</button>
+      <span class="vtime" id="vTime">0:00 / 0:00</span>
+      <input type="range" id="vScrub" min="0" max="1" step="0.001" value="0" aria-label="Position in the video">
+    </div>
+    <div class="vtrack video-only" id="vTrack" hidden>
+      <div class="strip-head"><span id="vCount"></span><span>Drag to reorder. Click a photo to edit it.</span></div>
+      <div class="vclips" id="vClips"></div>
+    </div>
+    <div class="stage-bar photo-only" id="stageBar" hidden>
       <span class="fname" id="fname"></span>
       <span class="dims" id="dims"></span>
       <span class="spacer"></span>
       <button class="pill" id="beforeBtn" aria-pressed="false" title="Slide between the original and your edit. Tip: hold \ to see the whole original.">Compare</button>
     </div>
-    <div class="strip" id="strip" hidden>
+    <div class="strip photo-only" id="strip" hidden>
       <div class="strip-head"><span id="count"></span><span>One grade for every photo. Use ← → to browse.</span></div>
       <div class="strip-scroll" id="stripScroll"></div>
     </div>
@@ -373,7 +454,8 @@ select:focus-visible{outline:none;border-color:var(--ink)}
       <div class="segmented" role="tablist" aria-label="Editing tools">
         <button role="tab" id="tabPresets" aria-selected="true" aria-controls="panePresets">Looks</button>
         <button role="tab" id="tabAdjust" aria-selected="false" aria-controls="paneAdjust">Adjust</button>
-        <button role="tab" id="tabCrop" aria-selected="false" aria-controls="paneCrop">Crop</button>
+        <button role="tab" id="tabCrop" class="photo-only" aria-selected="false" aria-controls="paneCrop">Crop</button>
+        <button role="tab" id="tabVideo" class="video-only" aria-selected="false" aria-controls="paneVideo">Video</button>
       </div>
 
       <div class="pane" id="panePresets" role="tabpanel" aria-labelledby="tabPresets">
@@ -427,10 +509,20 @@ select:focus-visible{outline:none;border-color:var(--ink)}
           </div>
         </div>
       </div>
+
+      <div class="pane video-only" id="paneVideo" role="tabpanel" aria-labelledby="tabVideo" hidden>
+        <div id="vPanel"><p class="small">Loading the video editor…</p></div>
+      </div>
     </div>
 
     <div class="card export">
-      <div class="fields">
+      <p class="vinfo video-only" id="vInfo"></p>
+      <div class="progress video-only" id="vProgress"><i id="vProgressBar"></i></div>
+      <div class="actions2 video-only">
+        <button class="btn primary" id="vExportBtn" disabled>Export video</button>
+      </div>
+      <p class="small video-only">A silent MP4. Add music in Instagram, Facebook, YouTube or your editing app.</p>
+      <div class="fields photo-only">
         <label class="field"><span>Size</span>
           <select id="maxEdge">
             <option value="0">Full size</option>
@@ -448,12 +540,12 @@ select:focus-visible{outline:none;border-color:var(--ink)}
           </select>
         </label>
       </div>
-      <div class="progress" id="progress"><i id="progressBar"></i></div>
-      <div class="actions2">
+      <div class="progress photo-only" id="progress"><i id="progressBar"></i></div>
+      <div class="actions2 photo-only">
         <button class="btn" id="exportOne" disabled>Export photo</button>
         <button class="btn primary" id="exportAll" disabled>Export all</button>
       </div>
-      <p class="small">Exports are new JPEGs; your originals are never touched. Camera details (date, GPS) aren't copied yet.</p>
+      <p class="small photo-only">Exports are new JPEGs; your originals are never touched. Camera details (date, GPS) aren't copied yet.</p>
     </div>
   </aside>
 </main>
@@ -596,13 +688,10 @@ var busy = false;
 var customLooks = [];
 var interacted = false;
 var dragging = null;     // a crop-frame drag in progress
+var mode = 'photos';     // 'photos' or 'video'
+var videoSaved = null;   // the video editor's settings, saved with the looks
 
 /* ============================== webgl ============================== */
-
-var canvas = document.getElementById('gl');
-var gl = canvas.getContext('webgl2', {
-  preserveDrawingBuffer:true, premultipliedAlpha:false, antialias:false, alpha:false
-});
 
 var VERT = '#version 300 es\n' +
 'in vec2 a_pos;\n' +
@@ -614,6 +703,8 @@ var VERT = '#version 300 es\n' +
 // the part of the image this draw covers, so big exports can be rendered in
 // strips. u_dim, u_grid and u_split are preview-only: shade outside the frame,
 // thirds grid, and the compare divider (left of it shows the original).
+// u_alpha blends a video clip over the one before it; u_seed moves the grain
+// each video frame so it reads as film grain, not dust on the lens.
 var FRAG = '#version 300 es\n' +
 'precision highp float;\n' +
 'in vec2 v_uv;\n' +
@@ -626,7 +717,7 @@ var FRAG = '#version 300 es\n' +
 'uniform float u_shAmt,u_hiAmt,u_balance;\n' +
 'uniform float u_aspect,u_mix;\n' +
 'uniform vec4 u_frame,u_view;\n' +
-'uniform float u_dim,u_grid,u_split;\n' +
+'uniform float u_dim,u_grid,u_split,u_alpha,u_seed;\n' +
 'uniform float u_warmSat,u_warmLum,u_greenHue,u_greenSat,u_greenLum,u_blueSat,u_blueLum;\n' +
 'float s2l(float c){ return c<=0.04045 ? c/12.92 : pow((c+0.055)/1.055,2.4); }\n' +
 'float l2s(float c){ return c<=0.0031308 ? c*12.92 : 1.055*pow(c,1.0/2.4)-0.055; }\n' +
@@ -702,7 +793,7 @@ var FRAG = '#version 300 es\n' +
 '  float d = clamp(length(vp)/0.7071, 0.0, 1.0);\n' +
 '  float vg = smoothstep(0.35, 1.0, d);\n' +
 '  c *= (1.0 - u_vignette*vg);\n' +
-'  float n = (vnoise(fuv*vec2(1400.0*fa, 1400.0)) - 0.5)*1.35;\n' +
+'  float n = (vnoise(fuv*vec2(1400.0*fa, 1400.0) + u_seed*vec2(113.1, 71.7)) - 0.5)*1.35;\n' +
 '  float gw = 1.0 - abs(luma(c) - 0.5)*1.1;\n' +
 '  c += n*u_grain*0.22*max(gw, 0.0);\n' +
 '  c = clamp(c, 0.0, 1.0);\n' +
@@ -718,51 +809,148 @@ var FRAG = '#version 300 es\n' +
 '    o *= mix(1.0 - u_dim, 1.0, inside);\n' +
 '    o = mix(o, vec3(1.0), max(edge*0.9, third*0.5));\n' +
 '  }\n' +
-'  fragColor = vec4(o, 1.0);\n' +
+'  fragColor = vec4(o, u_alpha);\n' +
 '}\n';
 
-var prog = null, tex = null, uni = {}, uploaded = null;
+var UNIFORMS = ['exposure','contrast','highlights','shadows','whites','blacks','temp','tint',
+  'vibrance','saturation','fade','vignette','grain','shTint','hiTint','shAmt','hiAmt','balance',
+  'aspect','mix','frame','view','dim','grid','split','alpha','seed','tex',
+  'warmSat','warmLum','greenHue','greenSat','greenLum','blueSat','blueLum'];
 
-function compile(type, src){
-  var sh = gl.createShader(type);
-  gl.shaderSource(sh, src); gl.compileShader(sh);
-  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
-  return sh;
-}
-
-function initGL(){
-  if(!gl) throw new Error('WebGL2 is not available in this browser.');
-  prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
-  gl.bindAttribLocation(prog, 0, 'a_pos');
-  gl.linkProgram(prog);
-  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
-  gl.useProgram(prog);
-
-  var vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-  var buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-
-  tex = gl.createTexture();
-  uploaded = null;
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-  ['exposure','contrast','highlights','shadows','whites','blacks','temp','tint',
-   'vibrance','saturation','fade','vignette','grain','shTint','hiTint','shAmt',
-   'hiAmt','balance','aspect','mix','frame','view','dim','grid','split','tex',
-   'warmSat','warmLum','greenHue','greenSat','greenLum','blueSat','blueLum'].forEach(function(n){
-    uni[n] = gl.getUniformLocation(prog, 'u_' + n);
+// The grading pipeline bound to one canvas. The photo editor has one; the video
+// editor makes its own, so the two never share GL state.
+function createRenderer(cv){
+  var gl = cv.getContext('webgl2', {
+    preserveDrawingBuffer:true, premultipliedAlpha:false, antialias:false, alpha:false
   });
-  gl.uniform1i(uni.tex, 0);
+  var r = { canvas:cv, gl:gl, uni:{} }, tex = null, uploaded = null, aniso = null;
+
+  function compile(type, src){
+    var sh = gl.createShader(type);
+    gl.shaderSource(sh, src); gl.compileShader(sh);
+    if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+
+  r.init = function(){
+    if(!gl) throw new Error('WebGL2 is not available in this browser.');
+    var prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+    gl.bindAttribLocation(prog, 0, 'a_pos');
+    gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+
+    var vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    tex = gl.createTexture();
+    uploaded = null;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    UNIFORMS.forEach(function(n){ r.uni[n] = gl.getUniformLocation(prog, 'u_' + n); });
+    gl.uniform1i(r.uni.tex, 0);
+    aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+  };
+
+  // A mipmapped texture, for drawing a photo much smaller than it is without
+  // shimmer: slow video zooms over roof sheeting, weatherboards, tiles.
+  r.texture = function(bm){
+    var t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bm);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if(aniso){
+      gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT,
+        Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+    }
+    return { handle:t, w:bm.width, h:bm.height };
+  };
+  r.release = function(t){ if(t) gl.deleteTexture(t.handle); };
+
+  // source: a bitmap (uploaded, and re-uploaded only when it changes) or a
+  // texture from r.texture(). view (optional): { frame:[x,y,w,h], dim, grid,
+  // split } for the photo preview; { region:[x,y,w,h], aspect } for one strip
+  // of a big export or a moving video frame; alpha blends over what's already
+  // drawn; seed moves the grain.
+  r.draw = function(w, h, source, mixAmount, grade, view){
+    var v = view || {}, uni = r.uni;
+    if(cv.width !== w) cv.width = w;
+    if(cv.height !== h) cv.height = h;
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.activeTexture(gl.TEXTURE0);
+    if(source && source.handle){
+      gl.bindTexture(gl.TEXTURE_2D, source.handle);
+    }else{
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      if(source !== uploaded){   // re-upload only when the photo changes, not on every slider tick
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        uploaded = source;
+      }
+    }
+
+    var e = grade || edit;
+    gl.uniform1f(uni.exposure,   e.exposure);
+    gl.uniform1f(uni.contrast,   e.contrast);
+    gl.uniform1f(uni.highlights, e.highlights);
+    gl.uniform1f(uni.shadows,    e.shadows);
+    gl.uniform1f(uni.whites,     e.whites);
+    gl.uniform1f(uni.blacks,     e.blacks);
+    gl.uniform1f(uni.temp,       e.temp);
+    gl.uniform1f(uni.tint,       e.tint);
+    gl.uniform1f(uni.vibrance,   e.vibrance);
+    gl.uniform1f(uni.saturation, e.saturation);
+    gl.uniform1f(uni.warmSat,    e.warmSat);
+    gl.uniform1f(uni.warmLum,    e.warmLum);
+    gl.uniform1f(uni.greenHue,   e.greenHue);
+    gl.uniform1f(uni.greenSat,   e.greenSat);
+    gl.uniform1f(uni.greenLum,   e.greenLum);
+    gl.uniform1f(uni.blueSat,    e.blueSat);
+    gl.uniform1f(uni.blueLum,    e.blueLum);
+    gl.uniform1f(uni.fade,       e.fade);
+    gl.uniform1f(uni.vignette,   e.vignette);
+    gl.uniform1f(uni.grain,      e.grain);
+    gl.uniform3fv(uni.shTint, hexRGB(e.shadowTint));
+    gl.uniform3fv(uni.hiTint, hexRGB(e.highlightTint));
+    gl.uniform1f(uni.shAmt,   e.shadowAmt);
+    gl.uniform1f(uni.hiAmt,   e.highlightAmt);
+    gl.uniform1f(uni.balance, e.balance);
+    gl.uniform1f(uni.aspect,  v.aspect || w / h);
+    gl.uniform1f(uni.mix,     mixAmount);
+
+    var f = v.frame || [0, 0, 1, 1], g = v.region || [0, 0, 1, 1];
+    gl.uniform4f(uni.frame, f[0], f[1], f[2], f[3]);
+    gl.uniform4f(uni.view,  g[0], g[1], g[2], g[3]);
+    gl.uniform1f(uni.dim,  v.dim || 0);
+    gl.uniform1f(uni.grid, v.grid ? 1 : 0);
+    gl.uniform1f(uni.split, v.split == null ? -1 : v.split);
+    gl.uniform1f(uni.alpha, v.alpha == null ? 1 : v.alpha);
+    gl.uniform1f(uni.seed,  v.seed || 0);
+    if(v.alpha != null && v.alpha < 1){
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }else{
+      gl.disable(gl.BLEND);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+  return r;
 }
 
 function hexRGB(h){
@@ -770,64 +958,16 @@ function hexRGB(h){
   return [((n>>16)&255)/255, ((n>>8)&255)/255, (n&255)/255];
 }
 
+// The photo editor's renderer. canvas, gl and draw() are its shorthands.
+var ed = createRenderer(document.getElementById('gl'));
+var canvas = ed.canvas, gl = ed.gl;
+function initGL(){ ed.init(); }
+function draw(w, h, bitmap, mixAmount, grade, view){ ed.draw(w, h, bitmap, mixAmount, grade, view); }
+
 // The GPU can drop the context (driver reset, or iOS reclaiming a background
 // tab). Rebuild everything when it comes back.
 canvas.addEventListener('webglcontextlost', function(e){ e.preventDefault(); });
 canvas.addEventListener('webglcontextrestored', function(){ initGL(); render(); });
-
-// view (optional): { frame:[x,y,w,h], dim, grid } for the crop preview, or
-// { region:[x,y,w,h], aspect } to render one strip of a bigger image
-function draw(w, h, bitmap, mixAmount, grade, view){
-  var v = view || {};
-  if(canvas.width !== w) canvas.width = w;
-  if(canvas.height !== h) canvas.height = h;
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  if(bitmap !== uploaded){   // re-upload only when the photo changes, not on every slider tick
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
-    uploaded = bitmap;
-  }
-
-  var e = grade || edit;
-  gl.uniform1f(uni.exposure,   e.exposure);
-  gl.uniform1f(uni.contrast,   e.contrast);
-  gl.uniform1f(uni.highlights, e.highlights);
-  gl.uniform1f(uni.shadows,    e.shadows);
-  gl.uniform1f(uni.whites,     e.whites);
-  gl.uniform1f(uni.blacks,     e.blacks);
-  gl.uniform1f(uni.temp,       e.temp);
-  gl.uniform1f(uni.tint,       e.tint);
-  gl.uniform1f(uni.vibrance,   e.vibrance);
-  gl.uniform1f(uni.saturation, e.saturation);
-  gl.uniform1f(uni.warmSat,    e.warmSat);
-  gl.uniform1f(uni.warmLum,    e.warmLum);
-  gl.uniform1f(uni.greenHue,   e.greenHue);
-  gl.uniform1f(uni.greenSat,   e.greenSat);
-  gl.uniform1f(uni.greenLum,   e.greenLum);
-  gl.uniform1f(uni.blueSat,    e.blueSat);
-  gl.uniform1f(uni.blueLum,    e.blueLum);
-  gl.uniform1f(uni.fade,       e.fade);
-  gl.uniform1f(uni.vignette,   e.vignette);
-  gl.uniform1f(uni.grain,      e.grain);
-  gl.uniform3fv(uni.shTint, hexRGB(e.shadowTint));
-  gl.uniform3fv(uni.hiTint, hexRGB(e.highlightTint));
-  gl.uniform1f(uni.shAmt,   e.shadowAmt);
-  gl.uniform1f(uni.hiAmt,   e.highlightAmt);
-  gl.uniform1f(uni.balance, e.balance);
-  gl.uniform1f(uni.aspect,  v.aspect || w / h);
-  gl.uniform1f(uni.mix,     mixAmount);
-
-  var f = v.frame || [0, 0, 1, 1], r = v.region || [0, 0, 1, 1];
-  gl.uniform4f(uni.frame, f[0], f[1], f[2], f[3]);
-  gl.uniform4f(uni.view,  r[0], r[1], r[2], r[3]);
-  gl.uniform1f(uni.dim,  v.dim || 0);
-  gl.uniform1f(uni.grid, v.grid ? 1 : 0);
-  gl.uniform1f(uni.split, v.split == null ? -1 : v.split);
-
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-}
 
 /* ============================== images ============================== */
 
@@ -1188,7 +1328,8 @@ strengthInput.addEventListener('input', function(){
 });
 
 /* -- tabs -- */
-var TABS = { presets:['tabPresets','panePresets'], adjust:['tabAdjust','paneAdjust'], crop:['tabCrop','paneCrop'] };
+var TABS = { presets:['tabPresets','panePresets'], adjust:['tabAdjust','paneAdjust'], crop:['tabCrop','paneCrop'],
+             video:['tabVideo','paneVideo'] };
 function selectTab(which){
   Object.keys(TABS).forEach(function(k){
     $(TABS[k][0]).setAttribute('aria-selected', k === which ? 'true' : 'false');
@@ -1255,6 +1396,7 @@ splitKnob.addEventListener('keydown', function(e){
 });
 window.addEventListener('keydown', function(e){
   if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if(mode === 'video'){ if(window.TonalVideo) window.TonalVideo.key(e); return; }
   if(e.key === '\\' && !peeking){ peeking = true; updateBefore(); }
   if((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.altKey && !e.ctrlKey && !e.metaKey){
     var n = current + (e.key === 'ArrowRight' ? 1 : -1);
@@ -1393,6 +1535,8 @@ canvas.addEventListener('pointercancel', endDrag);
 
 var renderQueued = false;
 function render(){
+  // In Video mode the stage shows the video, so grade changes repaint that instead.
+  if(mode === 'video'){ if(window.TonalVideo) window.TonalVideo.refresh(); return; }
   if(renderQueued) return;
   renderQueued = true;
   requestAnimationFrame(function(){
@@ -1461,6 +1605,7 @@ function addFiles(fileList){
   refreshStrip();
   if(current === -1) selectImage(0);
   updateExportState();
+  if(window.TonalVideo) window.TonalVideo.photosChanged();
 
   // thumbnails, one at a time so we never hold many decoded images at once.
   // Track items rather than indexes: photos can be removed while this runs.
@@ -1504,6 +1649,7 @@ function refreshStrip(){
       if(!items.length) resetView();
       else if(wasCurrent) selectImage(current);
       updateExportState();
+      if(window.TonalVideo) window.TonalVideo.photosChanged();
     });
     w.appendChild(b); w.appendChild(x);
     stripScroll.appendChild(w);
@@ -1530,6 +1676,7 @@ function updateExportState(){
   exportAllBtn.disabled = !ok;
   exportOneBtn.disabled = !ok || current < 0;
   exportAllBtn.textContent = items.length > 1 ? 'Export all ' + items.length : 'Export all';
+  if(window.TonalVideo) window.TonalVideo.updateExport();
 }
 
 $('addFiles').addEventListener('click', function(){ $('fileInput').click(); });
@@ -1843,6 +1990,7 @@ var saveTimer = null;
 function snapshotState(){
   return {
     session: { edit: Object.assign({}, edit), strength: strength, preset: activePreset, crop: cropId, generated: generated },
+    video: videoSaved,
     looks: customLooks
   };
 }
@@ -1917,6 +2065,7 @@ $('lookName').addEventListener('keydown', function(e){
 
 function applyRestored(data){
   if(!data) return;
+  if(data.video) videoSaved = data.video;
   if(Array.isArray(data.looks)){
     customLooks = data.looks.filter(function(l){ return l && l.id && l.name && l.p; });
     buildCustomGrid();
@@ -2422,6 +2571,60 @@ $('refInput').addEventListener('change', function(e){
     say('Couldn’t read that photo. Try a JPEG, PNG or WebP.');
   });
 });
+
+/* ============================== video mode ============================== */
+
+// The video editor lives in video.js and loads the first time Video is opened.
+var videoLoading = null;
+function loadVideo(){
+  if(window.TonalVideo) return Promise.resolve(window.TonalVideo);
+  if(!videoLoading){
+    videoLoading = new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = 'video.js';
+      s.onload = function(){ window.TonalVideo ? resolve(window.TonalVideo) : reject(new Error('video.js did not start')); };
+      s.onerror = function(){ videoLoading = null; s.remove(); reject(new Error('video.js did not load')); };
+      document.head.appendChild(s);
+    });
+  }
+  return videoLoading;
+}
+
+function setMode(m){
+  if(m === mode || busy) return;
+  mode = m;
+  document.body.classList.toggle('video-mode', m === 'video');
+  $('modePhotos').setAttribute('aria-selected', m === 'photos' ? 'true' : 'false');
+  $('modeVideo').setAttribute('aria-selected', m === 'video' ? 'true' : 'false');
+  if(m === 'video'){
+    say('');
+    selectTab('video');
+    loadVideo().then(function(v){ if(mode === 'video') v.enter(); }).catch(function(){
+      say('The video editor didn’t load. Check your connection and try again.');
+      setMode('photos');
+    });
+  }else{
+    if(window.TonalVideo) window.TonalVideo.leave();
+    if($('tabVideo').getAttribute('aria-selected') === 'true') selectTab('presets');
+    emptyEl.classList.toggle('hidden', !!previewBitmap);
+    render();
+  }
+}
+$('modePhotos').addEventListener('click', function(){ setMode('photos'); });
+$('modeVideo').addEventListener('click', function(){ setMode('video'); });
+
+// What video.js uses from the photo editor.
+window.Tonal = {
+  createRenderer: createRenderer,
+  decode: decode, fitInto: fitInto, frameFor: frameFor, glyph: glyph,
+  saveFile: saveFile, say: say, paintRange: paintRange,
+  photos: function(){ return items; },
+  grade: function(){ return Object.assign({}, edit); },
+  busy: function(){ return busy; },
+  setBusy: function(b){ busy = b; updateExportState(); },
+  savedVideo: function(){ return videoSaved; },
+  saveVideo: function(s){ videoSaved = s; persist(); }
+};
 
 /* ============================== boot ============================== */
 
