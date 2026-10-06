@@ -73,6 +73,14 @@ Video (the Photos / Video switch at the top):
     track), Rise, Drift (a slow diagonal ease-in) or Still. Any photo can have its
     own move (including Pan left / right and Lower); click the paused photo to set
     the point a push-in heads for
+  - 3D depth (a switch under Camera move): an AI depth model (Depth Anything V2
+    Small, run in the browser by Transformers.js, on the GPU via WebGPU where
+    available) works out what's near and far in each photo. The camera then moves
+    through it with parallax: push-ins become dolly moves where near things grow
+    faster than far ones, and pans and rises slide the foreground past the
+    background. Free and private; the model (about 70 MB with its engine) downloads
+    once from jsDelivr and Hugging Face, the photos never leave the browser. Moves
+    are kept gentle, since nothing hidden behind near things can be invented
   - Blend between photos: Dissolve, Bloom (the next photo glows in through its
     highlights), Light leak (warm film light sweeps across), Soft focus, Wipe (a soft
     angled edge), Slide (the next photo glides in over the last, with motion blur),
@@ -120,7 +128,8 @@ Known gaps:
 ## Dependencies
 
 [JSZip](https://stuk.github.io/jszip/) 3.10.1 via cdnjs, and Geist and Newsreader via
-Google Fonts. [Mediabunny](https://mediabunny.dev/) 1.61.1 (MPL-2.0) writes the MP4.
+Google Fonts. Video's optional 3D depth loads [Transformers.js](https://huggingface.co/docs/transformers.js) 3.8.1 from
+jsDelivr and the [Depth Anything V2 Small](https://huggingface.co/onnx-community/depth-anything-v2-small) model from Hugging Face on first use. [Mediabunny](https://mediabunny.dev/) 1.61.1 (MPL-2.0) writes the MP4.
 It's vendored in `vendor/` as a minified MP4-only build and only loaded when you
 export a video; `vendor/mediabunny-LICENSE.txt` has the licence and the rebuild
 command. Nothing else.

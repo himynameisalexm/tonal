@@ -57,12 +57,12 @@ var BLENDS = [
 var FPS = 30, FADE_IN = 0.6, FADE_OUT = 1.0, MAX_LEN = 60, PREVIEW_EDGE = 1280, MAX_DUR = 8;
 
 var settings = {
-  format:'16x9', pace:'luxury', motion:'auto', transition:'dissolve', letterbox:false,
+  format:'16x9', pace:'luxury', motion:'auto', transition:'dissolve', letterbox:false, depth:false,
   text:{ openTitle:'', openSub:'', closeTitle:'', closeSub:'', font:'serif', size:'m', pos:'centre', colour:'white' }
 };
 (function restore(s){
   if(!s) return;
-  ['format', 'pace', 'motion', 'transition', 'letterbox'].forEach(function(k){ if(k in s) settings[k] = s[k]; });
+  ['format', 'pace', 'motion', 'transition', 'letterbox', 'depth'].forEach(function(k){ if(k in s) settings[k] = s[k]; });
   if(s.text) Object.keys(settings.text).forEach(function(k){ if(k in s.text) settings.text[k] = s.text[k]; });
   [[FORMATS, 'format'], [PACES, 'pace'], [CAMERA, 'motion'], [BLENDS, 'transition']].forEach(function(o){
     if(!o[0].some(function(x){ return x.id === settings[o[1]]; })) settings[o[1]] = o[0][0].id;
@@ -136,6 +136,7 @@ function sync(){
     else left++;
   });
   if(selected >= clips.length) selected = clips.length - 1;
+  pruneDepth();
   var shortened = capLength();
   if(left) T.say('A video can be up to a minute, so ' + left + (left === 1 ? ' new photo wasn’t' : ' new photos weren’t') +
                  ' added. Swap photos in under Photos in the video.', false);
@@ -291,6 +292,147 @@ function viewAt(seg, e, iw, ih){
   return T.frameFor({ cx:lerp(a.cx, b.cx, e), cy:lerp(a.cy, b.cy, e), zoom:lerp(a.zoom, b.zoom, e) }, iw, ih, cp);
 }
 
+/* ============================== 3D depth ============================== */
+
+// With 3D depth on, an AI model (Depth Anything V2, run in this browser by
+// Transformers.js) works out how near each part of a photo is. The shader then
+// moves the camera through it: near things glide past far ones. The model
+// downloads once, on first use; photos never leave the browser.
+var DEPTH_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js';
+var DEPTH_MODEL = 'onnx-community/depth-anything-v2-small';
+var depths = new Map();   // photo -> { map, mid } once ready, { busy } or { failed } before
+var depthModel = null, depthJob = null;
+
+function depthOf(c){
+  if(!settings.depth) return null;
+  var d = depths.get(c.item);
+  return d && d.map ? d : null;
+}
+
+// How the camera moves through a photo at eased progress e, as [x, y, grow,
+// mid]: near things shift by x, y and grow by grow more than things at depth
+// mid. It follows the photo's camera move, so pans and rises gain parallax and
+// push-ins become dolly moves.
+function depthCam(seg, e, mid){
+  var m = motionOf(seg), s = e - 0.5, A = 0.07, x = 0, y = 0, grow = 0;
+  if(m === 'in') grow = 0.1*e;
+  else if(m === 'out') grow = 0.1*(1 - e);
+  else if(m === 'left') x = A*s;
+  else if(m === 'right') x = -A*s;
+  else if(m === 'up') y = A*s;
+  else if(m === 'down') y = -A*s;
+  else if(m === 'diag'){ var sx = seg.index % 2 ? -1 : 1; x = -sx*A*0.7*s; y = -A*0.5*s; grow = 0.06*e; }
+  else x = 0.04*s;   // still: the faintest sway
+  return [x, y, grow, mid];
+}
+
+function loadDepthModel(){
+  if(!depthModel){
+    depthModel = import(DEPTH_LIB).then(function(TF){
+      var gpu = navigator.gpu ? navigator.gpu.requestAdapter().catch(function(){ return null; }) : Promise.resolve(null);
+      return gpu.then(function(adapter){
+        var opts = adapter ? { device:'webgpu', dtype:'fp16' } : { device:'wasm', dtype:'q8' };
+        opts.session_options = { logSeverityLevel:3 };   // errors only, not routine notices
+        return TF.pipeline('depth-estimation', DEPTH_MODEL, opts);
+      }).then(function(pipe){ return { TF:TF, pipe:pipe }; });
+    });
+    depthModel.catch(function(){ depthModel = null; });
+  }
+  return depthModel;
+}
+
+// Works through the timeline's photos one at a time, so the first ones get
+// depth (and the preview moves in 3D) while the rest are still being done.
+// Resolves once every photo on the timeline has been done.
+function runDepth(){
+  if(!settings.depth) return Promise.resolve();
+  if(!depthJob) depthJob = depthStep().then(function(){ depthJob = null; });
+  return depthJob;
+}
+function depthStep(){
+  var next = settings.depth && clips.map(function(c){ return c.item; }).filter(function(it){ return !depths.has(it); })[0];
+  depthStatus();
+  if(!next) return Promise.resolve();
+  depths.set(next, { busy:true });
+  return loadDepthModel().then(function(M){
+    return T.decode(next.file, 640).then(function(bm){
+      var c = document.createElement('canvas');
+      c.width = bm.width; c.height = bm.height;
+      c.getContext('2d').drawImage(bm, 0, 0);
+      bm.close();
+      return M.TF.RawImage.fromCanvas(c);
+    }).then(function(img){ return M.pipe(img); }).then(function(out){
+      if(T.photos().indexOf(next) < 0){ depths.delete(next); return; }
+      var dm = smoothDepth(out.depth.data, out.depth.width, out.depth.height);
+      depths.set(next, { map:R.depthMap(dm.data, out.depth.width, out.depth.height), mid:dm.mid });
+    }).catch(function(){ depths.set(next, { failed:true }); });
+  }).then(function(){
+    refresh();
+    return depthStep();
+  }, function(){
+    // the model itself didn't load: turn 3D off and say why
+    depths.delete(next);
+    settings.depth = false;
+    save();
+    var cb = $('vDepth'); if(cb) cb.checked = false;
+    depthStatus();
+    T.say('3D depth couldn’t load. It needs an internet connection the first time; check yours and try again.');
+  });
+}
+
+// Spreads the model's depth over the full range (ignoring the extreme 2%), then
+// widens near things a little and softens edges, so moving around them tears less.
+function smoothDepth(src, w, h){
+  var n = w*h, hist = new Uint32Array(256), i, acc = 0, lo = -1, mid = -1, hi = 255;
+  for(i = 0; i < n; i++) hist[src[i]]++;
+  for(i = 0; i < 256; i++){
+    acc += hist[i];
+    if(lo < 0 && acc > n*0.02) lo = i;
+    if(mid < 0 && acc >= n*0.5) mid = i;
+    if(acc >= n*0.98){ hi = i; break; }
+  }
+  hi = Math.max(hi, lo + 1);
+  var a = new Float32Array(n), b = new Float32Array(n);
+  for(i = 0; i < n; i++) a[i] = clamp01((src[i] - lo)/(hi - lo));
+  // one direction of a filter over radius r: the largest value, or the average
+  function pass(from, to, r, largest, across){
+    for(var y = 0; y < h; y++) for(var x = 0; x < w; x++){
+      var v = 0;
+      for(var k = -r; k <= r; k++){
+        var s = across ? from[y*w + Math.min(w - 1, Math.max(0, x + k))] : from[Math.min(h - 1, Math.max(0, y + k))*w + x];
+        v = largest ? Math.max(v, s) : v + s;
+      }
+      to[y*w + x] = largest ? v : v/(2*r + 1);
+    }
+  }
+  pass(a, b, 3, true, true); pass(b, a, 3, true, false);
+  for(var p = 0; p < 2; p++){ pass(a, b, 4, false, true); pass(b, a, 4, false, false); }
+  var out = new Uint8Array(n);
+  for(i = 0; i < n; i++) out[i] = Math.round(a[i]*255);
+  return { data:out, mid:clamp01((mid - lo)/(hi - lo)) };
+}
+
+function depthStatus(){
+  var note = $('vDepthNote');
+  if(!note) return;
+  if(!settings.depth){ note.textContent = ''; return; }
+  var done = clips.filter(function(c){ var d = depths.get(c.item); return d && (d.map || d.failed); }).length;
+  var failed = clips.filter(function(c){ var d = depths.get(c.item); return d && d.failed; }).length;
+  note.textContent = done < clips.length
+    ? (depthModel ? 'Adding depth: ' + done + ' of ' + clips.length + ' photos…' : 'Loading the depth model…')
+    : failed ? 'Depth added, except for ' + failed + (failed === 1 ? ' photo' : ' photos') + ' it couldn’t read.' : 'Depth added to all ' + clips.length + ' photos.';
+}
+
+// Drops depth maps of photos no longer loaded.
+function pruneDepth(){
+  var photos = T.photos();
+  depths.forEach(function(d, it){
+    if(photos.indexOf(it) >= 0) return;
+    if(d.map) R.release(d.map);
+    depths.delete(it);
+  });
+}
+
 /* ============================== drawing ============================== */
 
 var stage = $('stage'), vCanvas = $('vCanvas'), vctx = vCanvas.getContext('2d');
@@ -298,7 +440,7 @@ var glc = document.createElement('canvas');
 var R = T.createRenderer(glc);
 R.init();
 glc.addEventListener('webglcontextlost', function(e){ e.preventDefault(); });
-glc.addEventListener('webglcontextrestored', function(){ R.init(); textures = []; refresh(); });
+glc.addEventListener('webglcontextrestored', function(){ R.init(); textures = []; depths.clear(); runDepth(); refresh(); });
 
 var SIZES = { s:0.05, m:0.064, l:0.082 };
 function serifFont(px){ return '500 ' + Math.round(px) + 'px Newsreader, Georgia, serif'; }
@@ -391,13 +533,15 @@ function paintFrame(ctx, W, H, t, seed, texFor, grade){
   st.layers.forEach(function(L){
     var tex = texFor(L.seg.clip);
     if(!tex) return;
-    var view = viewAt(L.seg, ease(L.p), tex.w, tex.h);
+    var e = ease(L.p), view = viewAt(L.seg, e, tex.w, tex.h);
+    var dp = depthOf(L.seg.clip);
+    if(dp) view = zoomView(view, 1.08);   // room for far things to shrink into
     if(L.zoom) view = zoomView(view, L.zoom);
     if(L.seg.index === selected) shownView = view;
     var first = !drawn;   // the first photo drawn always fills the frame
     R.draw(W, H, tex, 1, grade, { region:view, frame:view, aspect:tex.w/tex.h, seed:seed,
       alpha:first ? 1 : L.alpha, mask:first ? null : L.mask, edge:!first && L.edge,
-      shift:L.shift, blur:blurFor(L.blur, W, H) });
+      shift:L.shift, blur:blurFor(L.blur, W, H), depth:dp && { map:dp.map, cam:depthCam(L.seg, e, dp.mid) } });
     drawn++;
   });
   if(drawn) ctx.drawImage(glc, 0, 0, W, H);
@@ -716,6 +860,7 @@ function changed(rebuildClip){
   updateExport();
   save();
   refresh();
+  runDepth();   // photos new to the timeline
 }
 
 function removeClip(i){
@@ -935,6 +1080,25 @@ function buildAnimPanel(){
     buildClipSec();
     previewMove();
   }, 'To give one photo its own move, select it on the timeline.'));
+  var deep = el('label', 'vtoggle');
+  var dcb = el('input');
+  dcb.type = 'checkbox'; dcb.id = 'vDepth';
+  dcb.checked = settings.depth;
+  dcb.addEventListener('change', function(){
+    settings.depth = dcb.checked;
+    save();
+    depthStatus();
+    if(settings.depth) runDepth().then(function(){ if(settings.depth && active) previewMove(); });
+    refresh();
+  });
+  deep.appendChild(dcb);
+  deep.appendChild(document.createTextNode('3D depth'));
+  cam.appendChild(deep);
+  cam.appendChild(el('p', 'small anote', 'AI works out what’s near and far in each photo, so near things glide past ' +
+    'far ones as the camera moves. It runs on this computer; the first time it downloads about 70 MB.'));
+  var dnote = el('p', 'small anote');
+  dnote.id = 'vDepthNote';
+  cam.appendChild(dnote);
   p.appendChild(cam);
   var bl = section('Blend between photos');
   bl.appendChild(tiles(BLENDS, 'b', settings.transition, function(v){
@@ -1228,6 +1392,7 @@ async function exportVideo(){
   updateExport();
   try{
     var MB = await import('./vendor/mediabunny-mp4.min.mjs');
+    await runDepth();   // every photo needs its depth map before rendering starts
     var quality = new MB.Quality({ bitrate:bitrateFor(f) });
     var codec = await MB.getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width:W, height:H, quality:quality });
     if(!codec) throw new Error('this browser can’t encode video. Try a current Chrome, Edge, Safari or Firefox on a computer.');
@@ -1305,6 +1470,7 @@ function enter(){
   updateExport();
   updatePlay();
   loadPreviews();
+  runDepth();
   fontsReady().then(refresh);
   refresh();
 }
@@ -1322,6 +1488,7 @@ function photosChanged(){
   show();
   changed(true);
   loadPreviews();
+  runDepth();
 }
 
 // Space plays and pauses; the arrow keys step through the photos.
