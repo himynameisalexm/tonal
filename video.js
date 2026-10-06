@@ -420,7 +420,7 @@ function depthStatus(){
   var failed = clips.filter(function(c){ var d = depths.get(c.item); return d && d.failed; }).length;
   note.textContent = done < clips.length
     ? (depthModel ? 'Adding depth: ' + done + ' of ' + clips.length + ' photos…' : 'Loading the depth model…')
-    : failed ? 'Depth added, except for ' + failed + (failed === 1 ? ' photo' : ' photos') + ' it couldn’t read.' : 'Depth added to all ' + clips.length + ' photos.';
+    : failed ? 'Depth added, except for ' + failed + (failed === 1 ? ' photo' : ' photos') + ' it couldn’t read.' : 'Depth added to ' + (clips.length === 1 ? 'the photo.' : clips.length === 2 ? 'both photos.' : 'all ' + clips.length + ' photos.');
 }
 
 // Drops depth maps of photos no longer loaded.
